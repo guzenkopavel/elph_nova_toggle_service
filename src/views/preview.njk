@@ -1,0 +1,39 @@
+{% extends "layout.njk" %}
+
+{% block title %}Preview Config{% endblock %}
+
+{% block content %}
+<h1>Preview Resolved Config</h1>
+
+<form id="preview-form"
+      hx-get="/admin/preview/partial"
+      hx-target="#preview-results"
+      hx-push-url="false">
+  <label for="platform">Platform</label>
+  <select id="platform" name="platform" required style="width:auto">
+    <option value="" {{ "selected" if not platform }}>-- Select --</option>
+    <option value="ios" {{ "selected" if platform == "ios" }}>ios</option>
+    <option value="android" {{ "selected" if platform == "android" }}>android</option>
+    <option value="web" {{ "selected" if platform == "web" }}>web</option>
+    <option value="desktop" {{ "selected" if platform == "desktop" }}>desktop</option>
+  </select>
+
+  <label for="appVersion">App Version</label>
+  <input type="text" id="appVersion" name="appVersion" value="{{ appVersion or "" }}" placeholder="e.g. 1.0.0" style="width:auto">
+
+  <label for="audience">Audience</label>
+  <select id="audience" name="audience" style="width:auto">
+    <option value="anonymous" {{ "selected" if audience == "anonymous" or not audience }}>anonymous</option>
+    <option value="authenticated" {{ "selected" if audience == "authenticated" }}>authenticated</option>
+  </select>
+
+  <br><br>
+  <button type="submit">Preview</button>
+</form>
+
+<div id="preview-results">
+  {% if features %}
+  {% include "preview-partial.njk" %}
+  {% endif %}
+</div>
+{% endblock %}

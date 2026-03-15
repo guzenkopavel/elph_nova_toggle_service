@@ -718,11 +718,11 @@ Source of truth:
 
 ### Критерии приёмки
 
-- [ ] Stale write не затирает новые данные
-- [ ] Каждая успешная mutation увеличивает revision
-- [ ] Каждая mutation создаёт audit entry
-- [ ] Preview использует ту же resolution logic, что и public API
-- [ ] Cache invalidation привязана к успешному commit
+- [x] Stale write не затирает новые данные
+- [x] Каждая успешная mutation увеличивает revision
+- [x] Каждая mutation создаёт audit entry
+- [x] Preview использует ту же resolution logic, что и public API
+- [x] Cache invalidation привязана к успешному commit
 
 ---
 
@@ -790,13 +790,13 @@ Source of truth:
 
 ### Критерии приёмки
 
-- [ ] Админ может открыть список фич
-- [ ] Админ может открыть карточку ключа
-- [ ] Админ может создать/изменить правило через форму
-- [ ] Validation errors и stale conflict отображаются предсказуемо
-- [ ] Preview и revisions доступны из UI
-- [ ] UI остаётся thin wrapper над серверной логикой, а не дублирует её
-- [ ] Есть repeatable automated browser tests на critical admin flows
+- [x] Админ может открыть список фич
+- [x] Админ может открыть карточку ключа
+- [x] Админ может создать/изменить правило через форму
+- [x] Validation errors и stale conflict отображаются предсказуемо
+- [x] Preview и revisions доступны из UI
+- [x] UI остаётся thin wrapper над серверной логикой, а не дублирует её
+- [x] Есть repeatable automated browser tests на critical admin flows
 
 ---
 

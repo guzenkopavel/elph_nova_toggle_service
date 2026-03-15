@@ -1,0 +1,23 @@
+{% if error %}
+<p class="error">{{ error }}</p>
+{% elif features %}
+<h2>Resolved Features (revision {{ revision }})</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Feature Key</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for key, value in features %}
+    <tr>
+      <td>{{ key }}</td>
+      <td><code>{{ value | dump }}</code></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>Enter context above and click Preview.</p>
+{% endif %}

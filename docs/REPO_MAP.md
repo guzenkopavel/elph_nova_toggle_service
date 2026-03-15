@@ -2,7 +2,7 @@
 
 Repository map for `elph_nova_toggle_service`.
 
-Current state: Tasks 1–9 are complete. The files below reflect what exists now, plus an explicitly marked target structure for the remaining service implementation.
+Current state: Tasks 1–11 are complete. The files below reflect what exists now.
 
 ## Scope And Exclusions
 
@@ -121,15 +121,19 @@ Excluded from indexing by default:
   - documented template of all supported environment variables
 - `knexfile.ts`
   - Knex CLI entry point; exports named `development`, `test`, and `production` connection configs for migrations
+- `tsconfig.json`
+  - TypeScript compiler configuration (ES2022 target, CommonJS modules, strict mode)
+- `vitest.config.ts`
+  - Vitest test runner configuration; enables globals and sets up path aliases for the test suite
 
 ## `src`
 
 - `src/app.ts`
-  - Fastify app factory (`createApp`); `AppOptions` includes optional `manifestRegistry`, `readyChecks`, `publicOptions` (`PublicOptions` with `resolutionService`, `productId`, and `tokenVerifier`), and `adminOptions` (`AdminOptions` with `service`, `verifier`, and `productId`); conditionally registers the public and admin plugins when their respective options are provided
+  - Fastify app factory (`createApp`); registers `@fastify/cookie`, `@fastify/formbody`, `@fastify/view` (Nunjucks), and `@fastify/csrf-protection` for the admin UI; `AppOptions` includes optional `manifestRegistry`, `readyChecks`, `publicOptions` (`PublicOptions` with `resolutionService`, `productId`, and `tokenVerifier`), and `adminOptions` (`AdminOptions` with `service`, `verifier`, `productId`, and `registry`); conditionally registers the public plugin, the admin API plugin, and `adminUiPlugin` when their respective options are provided
 - `src/server.ts`
-  - process bootstrap: loads manifest, builds `ManifestRegistry`, registers drift check; resolves numeric `productId` via `upsertByName(env.DEFAULT_PRODUCT_ID)`; constructs `ConfigResolutionService` with three repositories; constructs `DefaultRevisionsRepository` and `AdminRulesService`; constructs `TokenVerifier` from env (`jwksUri`, `issuer`, `audience`, `jwksTimeoutMs`); passes both `publicOptions` and `adminOptions` to `createApp`, then calls `listen()`
+  - process bootstrap: loads manifest, builds `ManifestRegistry`, registers drift check; resolves numeric `productId` via `upsertByName(env.DEFAULT_PRODUCT_ID)`; constructs `ConfigResolutionService` with three repositories; constructs `DefaultRevisionsRepository` and `AdminRulesService`; constructs `TokenVerifier` from env (`jwksUri`, `issuer`, `audience`, `jwksTimeoutMs`); passes `registry` into `adminOptions` so `adminUiPlugin` activates in production; passes both `publicOptions` and `adminOptions` to `createApp`, then calls `listen()`
 - `src/config/env.ts`
-  - full stage-1 zod schema for all env variables; includes `SSO_JWKS_TIMEOUT_MS` (default 3000 ms) and a `superRefine` cross-field check that requires `SSO_ISSUER` and `SSO_AUDIENCE` when `SSO_JWKS_URI` is set in staging/production; throws on invalid values
+  - full stage-1 zod schema for all env variables; includes `SSO_JWKS_TIMEOUT_MS` (default 3000 ms), `ADMIN_COOKIE_SECRET` (required in staging/production, used by `@fastify/csrf-protection`), and a `superRefine` cross-field check that requires `SSO_ISSUER` and `SSO_AUDIENCE` when `SSO_JWKS_URI` is set in staging/production; throws on invalid values
 - `src/shared/logger.ts`
   - pino logger factory with redaction config for sensitive fields
 - `src/modules/health/index.ts`
@@ -210,9 +214,11 @@ Excluded from indexing by default:
 - `src/modules/admin/auth.ts`
   - `makeAdminAuthHook(verifier, requiredRole)`: returns a Fastify `preHandler` that enforces RBAC; anonymous → 401, `TokenInvalidError` → 401, `InfraError` → 503, wrong role → 403; attaches `adminRole` and `adminSub` to the request on success; exports `ROLE_VIEWER` (`feature-toggle-viewer`), `ROLE_EDITOR` (`feature-toggle-editor`), and `AdminRole` type; viewer permission is satisfied by either role, editor permission requires `ROLE_EDITOR` only
 - `src/modules/admin/service.ts`
-  - `AdminRulesService`: five methods — `createRule`, `updateRule`, `disableRule`, `listRules`, `getRule`; each write validates registry key presence, non-empty reason, `entry_json` fields against manifest payload schema, and ambiguous overlap via `detectAmbiguousOverlap`; all mutations run inside `withTransaction` (mutate rule → `updateRevision` → `insertRevision`) and call `invalidateCache` on success; `ConflictError` surfaces stale `expectedRevision` as 409; domain error classes: `ValidationError`, `ConflictError`, `NotFoundError`
+  - `AdminRulesService`: eight methods — `createRule`, `updateRule`, `disableRule`, `listRules`, `getRule`, `previewConfig` (resolves a full config snapshot for a given `RequestContext` without going through the public route), `listRevisions` (returns the most recent revision rows for a product, limit configurable), `getCurrentRevision(productId)` (returns the current monotonic revision number for use by the admin UI); each write validates registry key presence, non-empty reason, `entry_json` fields against manifest payload schema, and ambiguous overlap via `detectAmbiguousOverlap`; all mutations run inside `withTransaction` (mutate rule → `updateRevision` → `insertRevision`) and call `invalidateCache` on success; `ConflictError` surfaces stale `expectedRevision` as 409; domain error classes: `ValidationError`, `ConflictError`, `NotFoundError`
 - `src/modules/admin/routes.ts`
-  - Fastify plugin (`adminPlugin`) registering five routes under `/admin/api/rules`: `GET /` (list, ROLE_VIEWER), `GET /:id` (single, ROLE_VIEWER), `POST /` (create, ROLE_EDITOR → 201), `PATCH /:id` (update, ROLE_EDITOR → 200), `DELETE /:id` (disable, ROLE_EDITOR → 200); zod body validation on all mutations; `handleServiceError` maps `ValidationError` → 400, `NotFoundError` → 404, `ConflictError` → 409; `AdminPluginOptions` accepts `service`, `verifier`, and `productId`
+  - Fastify plugin (`adminPlugin`) registering seven routes: five under `/admin/api/rules` (`GET /` list ROLE_VIEWER, `GET /:id` single ROLE_VIEWER, `POST /` create ROLE_EDITOR → 201, `PATCH /:id` update ROLE_EDITOR → 200, `DELETE /:id` disable ROLE_EDITOR → 200) plus `GET /admin/api/preview` (ROLE_VIEWER, zod query: platform/appVersion/audience → full resolved config) and `GET /admin/api/revisions` (ROLE_VIEWER, zod query: limit → revision list); zod body/query validation on all routes; `handleServiceError` maps `ValidationError` → 400, `NotFoundError` → 404, `ConflictError` → 409; `AdminPluginOptions` accepts `service`, `verifier`, and `productId`
+- `src/modules/admin/ui-routes.ts`
+  - Fastify plugin (`adminUiPlugin`) serving server-rendered admin UI pages and POST form handlers; registers CSRF token endpoint, feature list, feature detail, create/edit/delete rule, preview context selector, and revision log routes; uses `@fastify/view` (Nunjucks), `@fastify/csrf-protection`, and HTMX partial responses; `AdminUiPluginOptions` accepts `service`, `verifier`, `productId`, and `registry`
 
 ## `tests/modules/config-resolution`
 
@@ -249,13 +255,53 @@ Excluded from indexing by default:
 - `tests/modules/admin/service.test.ts`
   - 10 unit tests (U1–U10) for `AdminRulesService` using mocked repositories and a real in-memory SQLite instance; covers unknown feature key → `ValidationError`, empty reason → `ValidationError`, revision conflict → `ConflictError`, successful create with cache invalidation, inactive rule → `NotFoundError`, cross-product rule access → `NotFoundError`, successful update with cache invalidation, already-inactive disable → `NotFoundError`, successful disable with cache invalidation, and unknown `entry_json` field against manifest schema → `ValidationError`
 - `tests/modules/admin/routes.test.ts`
-  - 26 route integration tests via `fastify.inject()` against an in-memory SQLite instance; groups: H (H1–H8, auth boundary: anonymous → 401, invalid token → 401, infra error → 503, viewer on GET → 200, viewer on POST/PATCH/DELETE → 403, editor on POST → 201), V (V1–V10, validation: unknown key → 400, empty reason → 400, stale revision → 409, not found → 404, ambiguous overlap → 409), ZB (ZB1–ZB5, zod schema: invalid audience/platform enum → 400, non-integer expectedRevision → 400, missing required fields → 400), CI1 (cache invalidated after write; GET list reflects new rule), B1 (full CRUD round-trip: create → get → update → disable, rule absent from list after disable), S1 (`changedBy` in revision record is JWT `sub`, not the role label)
+  - route integration tests via `fastify.inject()` against an in-memory SQLite instance; groups: H (H1–H8, auth boundary), V (V1–V10, validation), ZB (ZB1–ZB5, zod schema), CI1 (cache invalidation), B1 (full CRUD round-trip), S1 (`changedBy` is JWT `sub`); extended in Task 10 with PR1–PR13 (preview endpoint: auth, query validation, resolution correctness) and RV1–RV8 (revisions endpoint: auth, limit param, ordering, empty list)
+- `tests/modules/admin/preview-parity.test.ts`
+  - 6 PAR parity tests (PAR1–PAR6) verifying that `GET /admin/api/preview` and `GET /api/v1/feature-config` return identical `version`, `ttl`, and `features` for matched inputs; covers baseline no-rule case, rule matching anonymous ios, authenticated android, anonymous audience isolation, cross-platform divergence, and revision advancement after a write
+
+## `src/views`
+
+- `src/views/layout.njk`
+  - base Nunjucks layout with shared navigation, title block, and HTMX script include
+- `src/views/features.njk`
+  - admin page listing all remote-capable feature definitions for a product
+- `src/views/feature.njk`
+  - admin page showing feature detail (metadata, default value) and its active rules list
+- `src/views/rule-form.njk`
+  - create/edit rule form; renders in create or edit mode depending on `editMode` context variable
+- `src/views/preview.njk`
+  - preview context selector page; submits via HTMX to load resolved config inline
+- `src/views/preview-partial.njk`
+  - HTMX partial rendered in response to the preview form submission; shows resolved feature table or error message
+- `src/views/revisions.njk`
+  - revision audit log page listing recent config revisions with timestamps and changedBy
+- `src/views/error.njk`
+  - generic error page rendered by the admin UI error handler; displays statusCode and message
+
+## `tests/modules/admin` (continued)
+
+- `tests/modules/admin/ui-routes.test.ts`
+  - 22 `fastify.inject()` tests (groups UI-H auth boundary, UI-C CSRF, UI-V validation, UI-R rule CRUD pages, UI-QT preview query, UI-S service error mapping) for `adminUiPlugin` against an in-memory SQLite instance
+
+## `tests/e2e`
+
+- `tests/e2e/admin-ui.spec.ts`
+  - 9 Playwright E2E tests (E2E-1 through E2E-9) covering admin UI navigation, rule create/edit/delete flows, and preview page resolution via a real Chromium browser
+- `tests/e2e/server-helper.ts`
+  - `startE2EServer` / `E2EServer`: spins up a full `createApp` instance against an in-memory SQLite DB with seeded manifest data for Playwright tests; exports `EDITOR_TOKEN` constant
+- `tests/e2e/global-setup.ts`
+  - Playwright global setup: starts the E2E server and stores the instance on `globalThis` for teardown access
+- `tests/e2e/global-teardown.ts`
+  - Playwright global teardown: stops the E2E server started by `global-setup.ts`
+
+## Root Config Files (continued)
+
+- `playwright.config.ts`
+  - Playwright configuration: `testDir` set to `tests/e2e`, chromium project, `baseURL` at `http://127.0.0.1:3099`, wires `global-setup.ts` and `global-teardown.ts`
 
 ## Target Service Structure
 
 The paths below are planned but not yet created. They represent the intended implementation layout for stage-1.
 
-- `src/views/*`
-  - Nunjucks templates for the admin UI
 - `src/shared/*`
   - shared errors, logging, security, and narrow utilities

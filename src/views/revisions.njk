@@ -1,0 +1,33 @@
+{% extends "layout.njk" %}
+
+{% block title %}Revisions{% endblock %}
+
+{% block content %}
+<h1>Recent Revisions</h1>
+<table>
+  <thead>
+    <tr>
+      <th>Revision</th>
+      <th>Timestamp</th>
+      <th>Change Type</th>
+      <th>Feature Key</th>
+      <th>Reason</th>
+      <th>Changed By</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for rev in revisions %}
+    <tr>
+      <td>{{ rev.revision }}</td>
+      <td>{{ rev.changed_at }}</td>
+      <td>{{ rev.change_type }}</td>
+      <td>{{ rev.feature_key }}</td>
+      <td>{{ rev.reason }}</td>
+      <td>{{ rev.changed_by }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6">No revisions yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

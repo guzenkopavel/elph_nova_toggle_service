@@ -1,0 +1,70 @@
+{% extends "layout.njk" %}
+
+{% block title %}{{ featureKey }}{% endblock %}
+
+{% block content %}
+<h1>{{ featureKey }}</h1>
+{% if definition %}
+<p><strong>Name:</strong> {{ definition.name }}</p>
+{% if definition.description %}<p><strong>Description:</strong> {{ definition.description }}</p>{% endif %}
+<p><strong>Default:</strong> <code>{{ definition.default_entry_json }}</code></p>
+{% endif %}
+
+<h2>Active Rules</h2>
+{% if rules.length %}
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Audience</th>
+      <th>Platform</th>
+      <th>Min Version</th>
+      <th>Max Version</th>
+      <th>Value</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for rule in rules %}
+    <tr>
+      <td>{{ rule.id }}</td>
+      <td>{{ rule.audience }}</td>
+      <td>{{ rule.platform }}</td>
+      <td>{{ rule.min_app_version or "-" }}</td>
+      <td>{{ rule.max_app_version or "-" }}</td>
+      <td><code>{{ rule.entry_json }}</code></td>
+      <td>
+        <a href="/admin/features/{{ featureKey }}/rules/{{ rule.id }}/edit">Edit</a>
+        &nbsp;
+        <form method="POST" action="/admin/features/{{ featureKey }}/rules/{{ rule.id }}/disable" style="display:inline">
+          <input type="hidden" name="_csrf" value="{{ csrfToken }}">
+          <input type="hidden" name="reason" value="disabled via UI">
+          <input type="hidden" name="expected_revision" value="{{ currentRevision }}">
+          <button type="submit" onclick="return confirm('Disable rule {{ rule.id }}?')">Disable</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No active rules for this feature.</p>
+{% endif %}
+
+<p><a href="/admin/features/{{ featureKey }}/rules/new">+ Add Rule</a></p>
+
+<h2>Quick Toggle</h2>
+<form method="POST" action="/admin/features/{{ featureKey }}/quick-toggle"
+      hx-post="/admin/features/{{ featureKey }}/quick-toggle"
+      hx-target="body"
+      hx-push-url="true">
+  <input type="hidden" name="_csrf" value="{{ csrfToken }}">
+  <input type="hidden" name="expected_revision" value="{{ currentRevision }}">
+  <button type="submit" name="enabled" value="true">Enable All</button>
+  <button type="submit" name="enabled" value="false">Disable All</button>
+</form>
+
+{% if errorMessage %}
+<p class="error">{{ errorMessage }}</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "layout.njk" %}
+
+{% block title %}{% if editMode %}Edit{% else %}New{% endif %} Rule — {{ featureKey }}{% endblock %}
+
+{% block content %}
+<h1>{% if editMode %}Edit{% else %}New{% endif %} Rule for {{ featureKey }}</h1>
+
+{% if errorMessage %}
+<p class="error">{{ errorMessage }}</p>
+{% endif %}
+
+<form method="POST" action="{{ formAction }}">
+  <input type="hidden" name="_csrf" value="{{ csrfToken }}">
+  <input type="hidden" name="expected_revision" value="{{ currentRevision }}">
+
+  <label for="audience">Audience</label>
+  <select id="audience" name="audience" required>
+    <option value="all" {% if (rule and rule.audience == "all") or (not rule) %}selected{% endif %}>all</option>
+    <option value="anonymous" {% if rule and rule.audience == "anonymous" %}selected{% endif %}>anonymous</option>
+    <option value="authenticated" {% if rule and rule.audience == "authenticated" %}selected{% endif %}>authenticated</option>
+  </select>
+
+  <label for="platform">Platform</label>
+  <select id="platform" name="platform" required>
+    <option value="all" {% if (rule and rule.platform == "all") or (not rule) %}selected{% endif %}>all</option>
+    <option value="ios" {% if rule and rule.platform == "ios" %}selected{% endif %}>ios</option>
+    <option value="android" {% if rule and rule.platform == "android" %}selected{% endif %}>android</option>
+    <option value="web" {% if rule and rule.platform == "web" %}selected{% endif %}>web</option>
+    <option value="desktop" {% if rule and rule.platform == "desktop" %}selected{% endif %}>desktop</option>
+  </select>
+
+  <label for="min_app_version">Min App Version (optional)</label>
+  <input type="text" id="min_app_version" name="min_app_version" value="{{ rule.min_app_version if rule else '' }}" placeholder="e.g. 1.0.0">
+
+  <label for="max_app_version">Max App Version (optional)</label>
+  <input type="text" id="max_app_version" name="max_app_version" value="{{ rule.max_app_version if rule else '' }}" placeholder="e.g. 2.0.0">
+
+  <label for="entry_json">Value (JSON)</label>
+  <textarea id="entry_json" name="entry_json" rows="4" required placeholder='{"isEnabled":true}'>{{ rule.entry_json if rule else '{"isEnabled":true}' }}</textarea>
+
+  <label for="reason">Reason <span style="color:red">*</span></label>
+  <input type="text" id="reason" name="reason" value="{{ rule.reason if rule else '' }}" required placeholder="Describe why this change is being made">
+
+  <br><br>
+  <input type="submit" value="{% if editMode %}Update Rule{% else %}Create Rule{% endif %}">
+  &nbsp;
+  <a href="/admin/features/{{ featureKey }}">Cancel</a>
+</form>
+{% endblock %}

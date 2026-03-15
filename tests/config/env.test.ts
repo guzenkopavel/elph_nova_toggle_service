@@ -29,7 +29,11 @@ describe('parseEnv', () => {
 
   it('rejects DEV_ADMIN_PASSWORD in production', () => {
     expect(() =>
-      parseEnv({ NODE_ENV: 'production', DEV_ADMIN_PASSWORD: 'secret123' }),
+      parseEnv({
+        NODE_ENV: 'production',
+        DEV_ADMIN_PASSWORD: 'secret123',
+        ADMIN_COOKIE_SECRET: 'a-very-long-cookie-secret-for-production-use',
+      }),
     ).toThrow('DEV_ADMIN_PASSWORD')
   })
 
@@ -122,6 +126,7 @@ describe('parseEnv', () => {
         SSO_JWKS_URI: 'https://sso.example.com/.well-known/jwks.json',
         SSO_ISSUER: 'https://sso.example.com',
         SSO_AUDIENCE: 'feature-config-service',
+        ADMIN_COOKIE_SECRET: 'a-very-long-cookie-secret-for-production-use',
       })
       expect(env.SSO_JWKS_URI).toBe('https://sso.example.com/.well-known/jwks.json')
     })
@@ -130,6 +135,7 @@ describe('parseEnv', () => {
       expect(() =>
         parseEnv({
           NODE_ENV: 'production',
+          ADMIN_COOKIE_SECRET: 'a-very-long-cookie-secret-for-production-use',
         }),
       ).not.toThrow()
     })

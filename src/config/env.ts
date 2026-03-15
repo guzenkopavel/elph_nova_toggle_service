@@ -26,6 +26,7 @@ const envSchema = z.object({
   // Admin session
   ADMIN_SESSION_SECRET: z.string().min(32).optional(),
   ADMIN_ALLOWED_IPS: z.string().optional(),
+  ADMIN_COOKIE_SECRET: z.string().min(32).optional(),
 
   // Dev only — forbidden on production
   DEV_ADMIN_PASSWORD: z.string().optional(),
@@ -33,6 +34,13 @@ const envSchema = z.object({
   // CORS
   CORS_ALLOWED_ORIGINS: z.string().optional(),
 }).superRefine((data, ctx) => {
+  if (['staging', 'production'].includes(data.NODE_ENV) && !data.ADMIN_COOKIE_SECRET) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'ADMIN_COOKIE_SECRET is required in staging/production',
+      path: ['ADMIN_COOKIE_SECRET'],
+    })
+  }
   if (data.SSO_JWKS_URI && data.NODE_ENV !== 'development' && data.NODE_ENV !== 'test') {
     if (!data.SSO_ISSUER) {
       ctx.addIssue({

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}Admin{% endblock %} — Feature Toggles</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <style>
+    body { font-family: system-ui; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    nav a { margin-right: 1rem; }
+    table { border-collapse: collapse; width: 100%; }
+    td, th { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
+    .error { color: red; }
+    .success { color: green; }
+    form label { display: block; margin-top: 0.5rem; }
+    input, select, textarea { width: 100%; }
+    input[type=submit], button { width: auto; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/admin/features">Features</a>
+    <a href="/admin/preview">Preview</a>
+    <a href="/admin/revisions">Revisions</a>
+  </nav>
+  <hr>
+  {% block content %}{% endblock %}
+</body>
+</html>

@@ -19,9 +19,10 @@
     "sync-manifest": "tsx scripts/sync-manifest.ts"
   },
   "dependencies": {
-    "@fastify/csrf-protection": "^7.0.0",
+    "@fastify/cookie": "^9.4.0",
+    "@fastify/csrf-protection": "^6.4.1",
     "@fastify/formbody": "^7.0.0",
-    "@fastify/view": "^10.0.0",
+    "@fastify/view": "^9.1.0",
     "fastify": "^4.28.0",
     "jose": "^5.9.0",
     "knex": "^3.1.0",
@@ -32,12 +33,13 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/better-sqlite3": "^7.6.0",
     "@types/node": "^20.0.0",
     "@types/nunjucks": "^3.2.6",
     "@types/pg": "^8.11.0",
     "@types/semver": "^7.5.0",
     "better-sqlite3": "^11.0.0",
-    "@types/better-sqlite3": "^7.6.0",
     "tsx": "^4.11.0",
     "typescript": "^5.4.0",
     "vitest": "^1.6.0"

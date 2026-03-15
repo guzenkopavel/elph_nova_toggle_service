@@ -1,0 +1,29 @@
+{% extends "layout.njk" %}
+
+{% block title %}Features{% endblock %}
+
+{% block content %}
+<h1>Feature Toggles</h1>
+<table>
+  <thead>
+    <tr>
+      <th>Key</th>
+      <th>Name</th>
+      <th>Active Rules</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for feature in features %}
+    <tr>
+      <td><a href="/admin/features/{{ feature.feature_key }}">{{ feature.feature_key }}</a></td>
+      <td>{{ feature.name }}</td>
+      <td>{{ feature.activeRuleCount }}</td>
+      <td><a href="/admin/features/{{ feature.feature_key }}">View</a></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4">No features in manifest registry.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

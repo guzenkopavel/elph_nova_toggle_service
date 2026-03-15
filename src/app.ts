@@ -1,7 +1,14 @@
+import path from 'path'
 import Fastify, { FastifyInstance } from 'fastify'
+import fastifyCookie from '@fastify/cookie'
+import fastifyCsrf from '@fastify/csrf-protection'
+import fastifyFormBody from '@fastify/formbody'
+import fastifyView from '@fastify/view'
+import nunjucks from 'nunjucks'
 import healthPlugin from './modules/health/index'
 import publicPlugin from './modules/public/index'
 import adminPlugin from './modules/admin/routes'
+import adminUiPlugin from './modules/admin/ui-routes'
 import { createLogger } from './shared/logger'
 import type { Env } from './config/env'
 import type { ManifestRegistry } from './modules/manifest/registry'
@@ -19,11 +26,12 @@ export interface AdminOptions {
   service: AdminRulesService
   verifier: TokenVerifier
   productId: number
+  registry?: ManifestRegistry
 }
 
 export interface AppOptions {
   logger?: boolean | object
-  env?: Pick<Env, 'LOG_LEVEL' | 'TRUST_PROXY'>
+  env?: Pick<Env, 'LOG_LEVEL' | 'TRUST_PROXY' | 'ADMIN_COOKIE_SECRET'>
   readyChecks?: Array<() => Promise<void>>
   manifestRegistry?: ManifestRegistry
   publicOptions?: PublicOptions
@@ -59,6 +67,30 @@ export async function createApp(options: AppOptions = {}): Promise<FastifyInstan
 
   if (options.adminOptions) {
     await app.register(adminPlugin, options.adminOptions)
+
+    // Register UI plugins only when registry is provided
+    const { registry } = options.adminOptions
+    if (registry) {
+      await app.register(fastifyCookie, {
+        secret: options.env?.ADMIN_COOKIE_SECRET ?? 'dev-insecure-cookie-secret-change-in-production',
+      })
+      await app.register(fastifyCsrf, { sessionPlugin: '@fastify/cookie' })
+      await app.register(fastifyFormBody)
+      await app.register(fastifyView, {
+        engine: { nunjucks },
+        templates: path.join(__dirname, 'views'),
+        options: {
+          autoescape: true,
+        },
+      })
+
+      await app.register(adminUiPlugin, {
+        service: options.adminOptions.service,
+        verifier: options.adminOptions.verifier,
+        productId: options.adminOptions.productId,
+        registry,
+      })
+    }
   }
 
   return app
