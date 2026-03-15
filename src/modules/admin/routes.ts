@@ -6,10 +6,16 @@ import { makeAdminAuthHook, ROLE_VIEWER, ROLE_EDITOR } from './auth.js'
 import { ValidationError, ConflictError, NotFoundError } from './service.js'
 import type { RequestContext } from '../config-resolution/types.js'
 
+export interface AdminPluginRateLimitConfig {
+  max: number
+  timeWindow: number
+}
+
 export interface AdminPluginOptions {
   service: AdminRulesService
   verifier: TokenVerifier
   productId: number
+  rateLimitConfig?: AdminPluginRateLimitConfig
 }
 
 // ─── Request body schemas ─────────────────────────────────────────────────────
@@ -58,7 +64,7 @@ const disableRuleBodySchema = z.object({
 // ─── Plugin ───────────────────────────────────────────────────────────────────
 
 const adminPlugin: FastifyPluginAsync<AdminPluginOptions> = async (fastify, options) => {
-  const { service, verifier, productId } = options
+  const { service, verifier, productId, rateLimitConfig } = options
 
   const viewerHook = makeAdminAuthHook(verifier, ROLE_VIEWER)
   const editorHook = makeAdminAuthHook(verifier, ROLE_EDITOR)
@@ -66,6 +72,7 @@ const adminPlugin: FastifyPluginAsync<AdminPluginOptions> = async (fastify, opti
   // GET /admin/api/rules — list all active rules
   fastify.get('/admin/api/rules', {
     preHandler: viewerHook,
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (_request, reply) => {
     const rules = await service.listRules(productId)
     return reply.code(200).send({ rules })
@@ -74,6 +81,7 @@ const adminPlugin: FastifyPluginAsync<AdminPluginOptions> = async (fastify, opti
   // GET /admin/api/rules/:id — get single rule
   fastify.get<{ Params: { id: string } }>('/admin/api/rules/:id', {
     preHandler: viewerHook,
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (request, reply) => {
     const ruleId = parseInt(request.params.id, 10)
     if (isNaN(ruleId)) return reply.code(400).send({ error: 'Invalid rule id' })
@@ -88,6 +96,7 @@ const adminPlugin: FastifyPluginAsync<AdminPluginOptions> = async (fastify, opti
   // POST /admin/api/rules — create rule
   fastify.post<{ Body: unknown }>('/admin/api/rules', {
     preHandler: editorHook,
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (request, reply) => {
     const parseResult = createRuleBodySchema.safeParse(request.body)
     if (!parseResult.success) {
@@ -116,6 +125,7 @@ const adminPlugin: FastifyPluginAsync<AdminPluginOptions> = async (fastify, opti
   // PATCH /admin/api/rules/:id — update rule
   fastify.patch<{ Params: { id: string }; Body: unknown }>('/admin/api/rules/:id', {
     preHandler: editorHook,
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (request, reply) => {
     const ruleId = parseInt(request.params.id, 10)
     if (isNaN(ruleId)) return reply.code(400).send({ error: 'Invalid rule id' })
@@ -146,6 +156,7 @@ const adminPlugin: FastifyPluginAsync<AdminPluginOptions> = async (fastify, opti
   // DELETE /admin/api/rules/:id — disable rule
   fastify.delete<{ Params: { id: string }; Body: unknown }>('/admin/api/rules/:id', {
     preHandler: editorHook,
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (request, reply) => {
     const ruleId = parseInt(request.params.id, 10)
     if (isNaN(ruleId)) return reply.code(400).send({ error: 'Invalid rule id' })
@@ -171,6 +182,7 @@ const adminPlugin: FastifyPluginAsync<AdminPluginOptions> = async (fastify, opti
   // GET /admin/api/preview — preview resolved config for given context
   fastify.get('/admin/api/preview', {
     preHandler: viewerHook,
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (request, reply) => {
     const parseResult = previewQuerySchema.safeParse(request.query)
     if (!parseResult.success) {
@@ -199,6 +211,7 @@ const adminPlugin: FastifyPluginAsync<AdminPluginOptions> = async (fastify, opti
   // GET /admin/api/revisions — list recent revisions for the product
   fastify.get('/admin/api/revisions', {
     preHandler: viewerHook,
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (request, reply) => {
     const parseResult = revisionsQuerySchema.safeParse(request.query)
     if (!parseResult.success) {

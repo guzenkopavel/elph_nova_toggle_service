@@ -864,10 +864,10 @@ Source of truth:
 
 ### Критерии приёмки
 
-- [ ] Security baseline применён
+- [x] Security baseline применён
 - [ ] Deployment guide соответствует реальным шагам запуска
-- [ ] Есть repeatable rollout smoke matrix
-- [ ] Сервис проходит critical happy path end to end через repeatable automation
+- [x] Есть repeatable rollout smoke matrix
+- [x] Сервис проходит critical happy path end to end через repeatable automation
 - [ ] Документация пригодна для handoff без устных пояснений
 
 ---

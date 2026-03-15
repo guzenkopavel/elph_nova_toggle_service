@@ -12,11 +12,15 @@ const healthPlugin: FastifyPluginAsync<HealthPluginOptions> = async (
 ) => {
   const readyChecks = options.readyChecks ?? []
 
-  fastify.get('/health/live', async (_request, reply) => {
+  fastify.get('/health/live', {
+    config: { rateLimit: false },
+  }, async (_request, reply) => {
     return reply.status(200).send({ status: 'ok' })
   })
 
-  fastify.get('/health/ready', async (_request, reply) => {
+  fastify.get('/health/ready', {
+    config: { rateLimit: false },
+  }, async (_request, reply) => {
     if (readyChecks.length === 0) {
       return reply.status(200).send({ status: 'ok' })
     }

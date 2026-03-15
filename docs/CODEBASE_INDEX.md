@@ -2,7 +2,7 @@
 
 Deeper index for `elph_nova_toggle_service`.
 
-This repository is past the bootstrap stage. Tasks 1–11 are complete. The index now covers real source and test files as well as the agreed target zones that future implementation will fill.
+This repository is past the bootstrap stage. Tasks 1–12 are complete. The index now covers real source and test files as well as the agreed target zones that future implementation will fill.
 
 ## 1. Current Operational Docs
 
@@ -86,11 +86,11 @@ Delivery contour and service discovery contract:
 
 ### `src/app.ts`
 
-Fastify app factory exported as `createApp(options?)`. `AppOptions` accepts optional `manifestRegistry` (adds its `readyCheck()` to the health list), `readyChecks` (extra injectable checks), `publicOptions` (`PublicOptions` with `resolutionService`, numeric `productId`, and `tokenVerifier: TokenVerifier`), and `adminOptions` (`AdminOptions` with `service: AdminRulesService`, `verifier: TokenVerifier`, and `productId: number`). Conditionally registers the public plugin when `publicOptions` is present and the admin plugin when `adminOptions` is present. Added in Task 11: also registers `adminUiPlugin` when `adminOptions` is present; registers `@fastify/view` (Nunjucks, pointing at `src/views/`), `@fastify/form-body`, `@fastify/cookie`, and `@fastify/csrf-protection` before the UI plugin; includes a startup assertion that `fastify.csrfProtection` is defined. Does not call `listen()`.
+Fastify app factory exported as `createApp(options?)`. `AppOptions` accepts optional `manifestRegistry` (adds its `readyCheck()` to the health list), `readyChecks` (extra injectable checks), `publicOptions` (`PublicOptions` with `resolutionService`, numeric `productId`, and `tokenVerifier: TokenVerifier`), and `adminOptions` (`AdminOptions` with `service: AdminRulesService`, `verifier: TokenVerifier`, and `productId: number`). Conditionally registers the public plugin when `publicOptions` is present and the admin plugin when `adminOptions` is present. Added in Task 11: also registers `adminUiPlugin` when `adminOptions` is present; registers `@fastify/view` (Nunjucks, pointing at `src/views/`), `@fastify/form-body`, `@fastify/cookie`, and `@fastify/csrf-protection` before the UI plugin; includes a startup assertion that `fastify.csrfProtection` is defined. Added in Task 12: registers `@fastify/helmet` globally (security headers: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`; CSP disabled globally — admin templates manage their own); registers `@fastify/rate-limit` scoped to public plugin (max `RATE_LIMIT_PUBLIC_MAX`, default 300/min) and to admin plugin (max `RATE_LIMIT_ADMIN_MAX`, default 100/min), both disabled when `NODE_ENV=test`; registers `@fastify/cors` scoped to public plugin only, using `CORS_ALLOWED_ORIGINS` env var; passes `trustProxy` to the Fastify constructor from the `TRUST_PROXY` env var. Does not call `listen()`.
 
 ### `src/server.ts`
 
-Process entry point. On startup: loads the manifest, builds `ManifestRegistry`, constructs `ManifestSyncService` and registers its `driftReadyCheck()`; resolves numeric `productId` via `upsertByName(env.DEFAULT_PRODUCT_ID)` (idempotent, handles first-run before sync-manifest); constructs `ConfigResolutionService` with `DefaultProductsRepository`, `DefaultDefinitionsRepository`, and `DefaultRulesRepository`; constructs `DefaultRevisionsRepository` and `AdminRulesService`; constructs `TokenVerifier` from env (`jwksUri`, `issuer`, `audience`, `jwksTimeoutMs`); passes both `publicOptions` and `adminOptions` (sharing the same `tokenVerifier`) to `createApp`, then calls `listen()`. Exits with code 1 on any startup failure.
+Process entry point. On startup: loads the manifest, builds `ManifestRegistry`, constructs `ManifestSyncService` and registers its `driftReadyCheck()`; resolves numeric `productId` via `upsertByName(env.DEFAULT_PRODUCT_ID)` (idempotent, handles first-run before sync-manifest); constructs `ConfigResolutionService` with `DefaultProductsRepository`, `DefaultDefinitionsRepository`, and `DefaultRulesRepository`; constructs `DefaultRevisionsRepository` and `AdminRulesService`; constructs `TokenVerifier` from env (`jwksUri`, `issuer`, `audience`, `jwksTimeoutMs`); passes both `publicOptions` and `adminOptions` (sharing the same `tokenVerifier`) to `createApp`, then calls `listen()`. Added in Task 12: graceful shutdown — registers `SIGTERM` and `SIGINT` handlers that call `app.close()`, then `db.destroy()`, then `process.exit(0)`; a 10-second watchdog forces `process.exit(1)` if the shutdown sequence stalls. Exits with code 1 on any startup failure.
 
 ### `src/modules/manifest`
 
@@ -103,7 +103,7 @@ Implemented in Task 5. Four files:
 
 ### `src/config/env.ts`
 
-Full stage-1 zod schema covering all service env variables (not just `NODE_ENV`/`PORT`). Added in Task 8: `SSO_JWKS_TIMEOUT_MS` (optional integer, default 3000 ms) and a `superRefine` cross-field check that requires both `SSO_ISSUER` and `SSO_AUDIENCE` to be present when `SSO_JWKS_URI` is set in staging or production. Added in Task 11: `ADMIN_COOKIE_SECRET` (required string in staging/production; used to sign CSRF cookies via `@fastify/cookie`). Throws at module load time on invalid values. Exports typed `Env` type and singleton `env` instance.
+Full stage-1 zod schema covering all service env variables (not just `NODE_ENV`/`PORT`). Added in Task 8: `SSO_JWKS_TIMEOUT_MS` (optional integer, default 3000 ms) and a `superRefine` cross-field check that requires both `SSO_ISSUER` and `SSO_AUDIENCE` to be present when `SSO_JWKS_URI` is set in staging or production. Added in Task 11: `ADMIN_COOKIE_SECRET` (required string in staging/production; used to sign CSRF cookies via `@fastify/cookie`). Added in Task 12: `RATE_LIMIT_PUBLIC_MAX` (optional integer, default 300), `RATE_LIMIT_ADMIN_MAX` (optional integer, default 100), `TRUST_PROXY` (optional boolean, default false), `TRUSTED_PROXY_IPS` (required string when `TRUST_PROXY=true` in staging/production), `CORS_ALLOWED_ORIGINS` (required string in staging/production). Throws at module load time on invalid values. Exports typed `Env` type and singleton `env` instance.
 
 ### `src/shared/logger.ts`
 
@@ -122,7 +122,7 @@ Vitest suite covering `createApp`: instantiation without error, inject returning
 
 ### `tests/config/env.test.ts`
 
-19 unit tests for `parseEnv`: missing required variables, invalid types, accepted defaults, and full valid input (original 8 cases); plus 11 new cases added in Task 8 covering `SSO_JWKS_TIMEOUT_MS` default value, explicit override, and the cross-field enforcement that rejects `SSO_JWKS_URI` in staging/production without `SSO_ISSUER` and `SSO_AUDIENCE`.
+Unit tests for `parseEnv`: missing required variables, invalid types, accepted defaults, and full valid input (original 8 cases); plus 11 cases added in Task 8 covering `SSO_JWKS_TIMEOUT_MS` default value, explicit override, and the cross-field enforcement that rejects `SSO_JWKS_URI` in staging/production without `SSO_ISSUER` and `SSO_AUDIENCE`; plus cases added in Task 12 covering `RATE_LIMIT_PUBLIC_MAX`, `RATE_LIMIT_ADMIN_MAX`, `TRUST_PROXY`, `TRUSTED_PROXY_IPS` conditional requirement, and `CORS_ALLOWED_ORIGINS` conditional requirement.
 
 ### `tests/health.test.ts`
 
@@ -197,7 +197,7 @@ Implemented in Task 9; extended in Tasks 10 and 11. Five files:
 
 ### `tests/modules/admin/routes.test.ts`
 
-26 route integration tests via `fastify.inject()` against an in-memory SQLite instance with two seeded feature definitions (`chat`, `video_call`). Test groups: H (H1–H8, auth boundary enforcement across all HTTP verbs and role levels), V (V1–V10, service-level validation surfaced through HTTP status codes: 400 for bad input, 404 for missing resources, 409 for stale revision and ambiguous overlap), ZB (ZB1–ZB5, zod request-body schema enforcement before the service is reached), CI1 (resolution cache is invalidated after a successful write and the list endpoint immediately reflects the new rule), B1 (full create → get → update → disable CRUD round-trip; rule absent from list after disable), S1 (`changedBy` in the revision record is the JWT `sub` field, not the role label string).
+Route integration tests via `fastify.inject()` against an in-memory SQLite instance with two seeded feature definitions (`chat`, `video_call`). Test groups: H (H1–H8, auth boundary enforcement across all HTTP verbs and role levels), V (V1–V10, service-level validation surfaced through HTTP status codes: 400 for bad input, 404 for missing resources, 409 for stale revision and ambiguous overlap), ZB (ZB1–ZB5, zod request-body schema enforcement before the service is reached), CI1 (resolution cache is invalidated after a successful write and the list endpoint immediately reflects the new rule), B1 (full create → get → update → disable CRUD round-trip; rule absent from list after disable), S1 (`changedBy` in the revision record is the JWT `sub` field, not the role label string).
 
 ### `tests/modules/admin/preview-parity.test.ts`
 
@@ -206,6 +206,18 @@ Added in Task 10. 6 PAR tests (PAR1–PAR6) verifying that `GET /admin/api/previ
 ### `tests/modules/admin/ui.test.ts`
 
 Added in Task 11. 22 inject tests via `fastify.inject()` covering the server-rendered UI plugin: HTML route rendering (UI-H1–H7 — features list, feature detail, new-rule form, edit-rule form, preview page, preview partial, revisions page), create/update/disable/quick-toggle POST handlers (UI-C1–C4), form validation error paths (UI-V1–V3), CSRF rejection (UI-R1–R4), and quick-toggle behavior (UI-QT1–QT2). Session/cookie paths (UI-S1–S2) cover signed-cookie round-trip for CSRF state.
+
+### `tests/modules/hardening/rate-limit.test.ts`
+
+Added in Task 12. 4 tests (RL1–RL4) verifying per-contour rate limiting behaviour via `fastify.inject()`: RL1 public contour allows requests up to `RATE_LIMIT_PUBLIC_MAX` and returns 429 on the next request; RL2 admin contour limits at `RATE_LIMIT_ADMIN_MAX`; RL3 rate limits are disabled when `NODE_ENV=test` (header absent, requests never throttled); RL4 public and admin counters are independent.
+
+### `tests/modules/hardening/security-headers.test.ts`
+
+Added in Task 12. 5 tests (SH1–SH5) asserting that `@fastify/helmet` response headers are present on every route: SH1 `X-Content-Type-Options: nosniff`; SH2 `X-Frame-Options: SAMEORIGIN`; SH3 `Referrer-Policy` set; SH4 no `Content-Security-Policy` header globally (CSP disabled at app level); SH5 headers present on both public and admin responses.
+
+### `tests/modules/hardening/cors.test.ts`
+
+Added in Task 12. 6 tests (CORS1–CORS6) for `@fastify/cors` scoped to the public plugin: CORS1 allowed origin receives `Access-Control-Allow-Origin`; CORS2 disallowed origin receives no CORS header; CORS3 `OPTIONS` preflight returns 204 for allowed origin; CORS4 admin routes do not expose CORS headers regardless of origin; CORS5 multiple origins in `CORS_ALLOWED_ORIGINS` (comma-separated) are each accepted; CORS6 missing `CORS_ALLOWED_ORIGINS` in staging/production fails env validation.
 
 ### `tests/e2e/admin-ui.spec.ts`
 
@@ -251,13 +263,17 @@ Shell smoke script for the four auth scenarios:
 - invalid token — expects 401
 - infra failure path — documents the expected 503 surface
 
+### `scripts/smoke-rollout.sh`
+
+Added in Task 12. Repeatable pre-release smoke matrix covering 7 scenarios against a running service instance: health live (200), health ready (200), anonymous config (200 with features map), invalid token (401), token verification infra failure (503), security headers present on public response, admin endpoint without auth (401), `Cache-Control: no-store` on public config response. Invocable via `npm run smoke:rollout`. Exits non-zero on any failed assertion.
+
 ### `src/views`
 
 Added in Task 11. Nunjucks templates for the server-rendered admin UI. One template per admin page: features list, feature detail, new-rule form, edit-rule form, preview page, preview partial (HTMX target), and revisions page. Templates receive all data from route handlers; no business logic lives here. HTMX is used only for the preview partial refresh.
 
-## 4. Planned Runtime Zones
+## 4. Implemented Runtime Zones
 
-These sections describe the implementation areas expected to appear in Task 12.
+All stage-1 implementation zones are complete. Key locations for reference:
 
 ### `src/db`
 

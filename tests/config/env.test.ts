@@ -33,6 +33,7 @@ describe('parseEnv', () => {
         NODE_ENV: 'production',
         DEV_ADMIN_PASSWORD: 'secret123',
         ADMIN_COOKIE_SECRET: 'a-very-long-cookie-secret-for-production-use',
+        CORS_ALLOWED_ORIGINS: 'https://app.example.com',
       }),
     ).toThrow('DEV_ADMIN_PASSWORD')
   })
@@ -96,6 +97,8 @@ describe('parseEnv', () => {
           NODE_ENV: 'staging',
           SSO_JWKS_URI: 'https://sso.example.com/.well-known/jwks.json',
           SSO_AUDIENCE: 'feature-config-service',
+          ADMIN_COOKIE_SECRET: 'a-very-long-cookie-secret-for-staging-use00',
+          CORS_ALLOWED_ORIGINS: 'https://app.example.com',
         }),
       ).toThrow('SSO_ISSUER')
     })
@@ -106,6 +109,8 @@ describe('parseEnv', () => {
           NODE_ENV: 'staging',
           SSO_JWKS_URI: 'https://sso.example.com/.well-known/jwks.json',
           SSO_ISSUER: 'https://sso.example.com',
+          ADMIN_COOKIE_SECRET: 'a-very-long-cookie-secret-for-staging-use00',
+          CORS_ALLOWED_ORIGINS: 'https://app.example.com',
         }),
       ).toThrow('SSO_AUDIENCE')
     })
@@ -116,6 +121,8 @@ describe('parseEnv', () => {
           NODE_ENV: 'production',
           SSO_JWKS_URI: 'https://sso.example.com/.well-known/jwks.json',
           SSO_AUDIENCE: 'feature-config-service',
+          ADMIN_COOKIE_SECRET: 'a-very-long-cookie-secret-for-production-use',
+          CORS_ALLOWED_ORIGINS: 'https://app.example.com',
         }),
       ).toThrow('SSO_ISSUER')
     })
@@ -127,6 +134,7 @@ describe('parseEnv', () => {
         SSO_ISSUER: 'https://sso.example.com',
         SSO_AUDIENCE: 'feature-config-service',
         ADMIN_COOKIE_SECRET: 'a-very-long-cookie-secret-for-production-use',
+        CORS_ALLOWED_ORIGINS: 'https://app.example.com',
       })
       expect(env.SSO_JWKS_URI).toBe('https://sso.example.com/.well-known/jwks.json')
     })
@@ -136,6 +144,111 @@ describe('parseEnv', () => {
         parseEnv({
           NODE_ENV: 'production',
           ADMIN_COOKIE_SECRET: 'a-very-long-cookie-secret-for-production-use',
+          CORS_ALLOWED_ORIGINS: 'https://app.example.com',
+        }),
+      ).not.toThrow()
+    })
+  })
+
+  describe('CORS_ALLOWED_ORIGINS staging/production guard', () => {
+    it('rejects staging startup without CORS_ALLOWED_ORIGINS', () => {
+      expect(() =>
+        parseEnv({
+          NODE_ENV: 'staging',
+          ADMIN_COOKIE_SECRET: 'a-very-long-cookie-secret-for-staging-use00',
+        }),
+      ).toThrow('CORS_ALLOWED_ORIGINS')
+    })
+
+    it('rejects production startup without CORS_ALLOWED_ORIGINS', () => {
+      expect(() =>
+        parseEnv({
+          NODE_ENV: 'production',
+          ADMIN_COOKIE_SECRET: 'a-very-long-cookie-secret-for-production-use',
+        }),
+      ).toThrow('CORS_ALLOWED_ORIGINS')
+    })
+
+    it('accepts staging with CORS_ALLOWED_ORIGINS set to a URL', () => {
+      expect(() =>
+        parseEnv({
+          NODE_ENV: 'staging',
+          ADMIN_COOKIE_SECRET: 'a-very-long-cookie-secret-for-staging-use00',
+          CORS_ALLOWED_ORIGINS: 'https://app.example.com',
+        }),
+      ).not.toThrow()
+    })
+
+    it('accepts staging with CORS_ALLOWED_ORIGINS set to "none"', () => {
+      expect(() =>
+        parseEnv({
+          NODE_ENV: 'staging',
+          ADMIN_COOKIE_SECRET: 'a-very-long-cookie-secret-for-staging-use00',
+          CORS_ALLOWED_ORIGINS: 'none',
+        }),
+      ).not.toThrow()
+    })
+
+    it('accepts production with CORS_ALLOWED_ORIGINS set to a URL', () => {
+      expect(() =>
+        parseEnv({
+          NODE_ENV: 'production',
+          ADMIN_COOKIE_SECRET: 'a-very-long-cookie-secret-for-production-use',
+          CORS_ALLOWED_ORIGINS: 'https://app.example.com',
+        }),
+      ).not.toThrow()
+    })
+
+    it('does not require CORS_ALLOWED_ORIGINS in development', () => {
+      expect(() => parseEnv({ NODE_ENV: 'development' })).not.toThrow()
+    })
+
+    it('does not require CORS_ALLOWED_ORIGINS in test', () => {
+      expect(() => parseEnv({ NODE_ENV: 'test' })).not.toThrow()
+    })
+  })
+
+  describe('TRUST_PROXY production guard', () => {
+    it('rejects TRUST_PROXY=true in production without TRUSTED_PROXY_IPS', () => {
+      expect(() =>
+        parseEnv({
+          NODE_ENV: 'production',
+          TRUST_PROXY: 'true',
+          ADMIN_COOKIE_SECRET: 'a-very-long-cookie-secret-for-production-use',
+          CORS_ALLOWED_ORIGINS: 'https://app.example.com',
+        }),
+      ).toThrow('TRUSTED_PROXY_IPS')
+    })
+
+    it('accepts TRUST_PROXY=true in production with TRUSTED_PROXY_IPS set', () => {
+      expect(() =>
+        parseEnv({
+          NODE_ENV: 'production',
+          TRUST_PROXY: 'true',
+          TRUSTED_PROXY_IPS: '10.0.0.1,10.0.0.2',
+          ADMIN_COOKIE_SECRET: 'a-very-long-cookie-secret-for-production-use',
+          CORS_ALLOWED_ORIGINS: 'https://app.example.com',
+        }),
+      ).not.toThrow()
+    })
+
+    it('allows TRUST_PROXY=true in staging without TRUSTED_PROXY_IPS', () => {
+      expect(() =>
+        parseEnv({
+          NODE_ENV: 'staging',
+          TRUST_PROXY: 'true',
+          ADMIN_COOKIE_SECRET: 'a-very-long-cookie-secret-for-staging-use00',
+          CORS_ALLOWED_ORIGINS: 'https://app.example.com',
+        }),
+      ).not.toThrow()
+    })
+
+    it('allows TRUST_PROXY absent (defaults to false) in production without TRUSTED_PROXY_IPS', () => {
+      expect(() =>
+        parseEnv({
+          NODE_ENV: 'production',
+          ADMIN_COOKIE_SECRET: 'a-very-long-cookie-secret-for-production-use',
+          CORS_ALLOWED_ORIGINS: 'https://app.example.com',
         }),
       ).not.toThrow()
     })

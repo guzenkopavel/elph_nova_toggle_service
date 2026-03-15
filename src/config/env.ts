@@ -4,7 +4,10 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'staging', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
-  TRUST_PROXY: z.coerce.boolean().default(false),
+  // TRUST_PROXY: set true ONLY when this server runs behind a trusted reverse proxy
+  // (nginx, ALB, etc.) that strips and re-adds X-Forwarded-For. Setting this without
+  // a proxy allows clients to spoof their IP and bypass per-IP rate limiting.
+  TRUST_PROXY: z.coerce.boolean().optional().default(false),
 
   // Database — required in staging/production, optional with default for local dev
   DATABASE_URL: z.string().min(1).default('sqlite:./data/feature-config.db'),
@@ -33,12 +36,32 @@ const envSchema = z.object({
 
   // CORS
   CORS_ALLOWED_ORIGINS: z.string().optional(),
+
+  // Rate limits
+  RATE_LIMIT_PUBLIC_MAX: z.coerce.number().int().positive().optional().default(300),
+  RATE_LIMIT_ADMIN_MAX: z.coerce.number().int().positive().optional().default(100),
+
+  TRUSTED_PROXY_IPS: z.string().optional(), // comma-separated IPs/CIDRs, required with TRUST_PROXY=true in production
 }).superRefine((data, ctx) => {
   if (['staging', 'production'].includes(data.NODE_ENV) && !data.ADMIN_COOKIE_SECRET) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: 'ADMIN_COOKIE_SECRET is required in staging/production',
       path: ['ADMIN_COOKIE_SECRET'],
+    })
+  }
+  if (['staging', 'production'].includes(data.NODE_ENV ?? 'development') && !data.CORS_ALLOWED_ORIGINS) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'CORS_ALLOWED_ORIGINS is required in staging/production. Set to a comma-separated list of allowed origins (e.g. "https://app.example.com") or explicitly set to "none" to deny all cross-origin requests.',
+      path: ['CORS_ALLOWED_ORIGINS'],
+    })
+  }
+  if (data.TRUST_PROXY === true && data.NODE_ENV === 'production' && !data.TRUSTED_PROXY_IPS) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'TRUST_PROXY=true in production requires TRUSTED_PROXY_IPS to be set (comma-separated CIDR list or IP addresses of your proxy tier) to prevent X-Forwarded-For spoofing.',
+      path: ['TRUST_PROXY'],
     })
   }
   if (data.SSO_JWKS_URI && data.NODE_ENV !== 'development' && data.NODE_ENV !== 'test') {

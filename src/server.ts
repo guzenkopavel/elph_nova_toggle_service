@@ -14,6 +14,8 @@ import { ConfigResolutionService } from './modules/config-resolution/service'
 import { AdminRulesService } from './modules/admin/service'
 import { createTokenVerifier } from './modules/auth/token-verifier'
 
+const SHUTDOWN_TIMEOUT_MS = parseInt(process.env['SHUTDOWN_TIMEOUT_MS'] ?? '10000', 10)
+
 async function start() {
   try {
     const env = parseEnv()
@@ -68,21 +70,35 @@ async function start() {
     })
 
     let closing = false
+
+    async function gracefulShutdown(signal: string) {
+      if (closing) return
+      closing = true
+
+      logger.info({ signal }, 'Received shutdown signal')
+
+      const watchdog = setTimeout(() => {
+        logger.error('Graceful shutdown timed out, forcing exit')
+        process.exit(1)
+      }, SHUTDOWN_TIMEOUT_MS)
+      // Unref so the watchdog timer does not prevent the process from exiting normally
+      watchdog.unref()
+
+      try {
+        await app.close()
+        await defaultDb.destroy()
+        logger.info('Graceful shutdown complete')
+        clearTimeout(watchdog)
+        process.exit(0)
+      } catch (err) {
+        logger.error({ err }, 'Error during graceful shutdown')
+        process.exit(1)
+      }
+    }
+
     const signals: NodeJS.Signals[] = ['SIGTERM', 'SIGINT']
     signals.forEach((signal) => {
-      process.once(signal, async () => {
-        if (closing) return
-        closing = true
-        logger.info({ signal }, 'Received shutdown signal')
-        try {
-          await app.close()
-          logger.info('Server closed gracefully')
-          process.exit(0)
-        } catch (err) {
-          logger.error(err, 'Error during graceful shutdown')
-          process.exit(1)
-        }
-      })
+      process.once(signal, () => gracefulShutdown(signal))
     })
 
     await app.listen({ port: env.PORT, host: '0.0.0.0' })

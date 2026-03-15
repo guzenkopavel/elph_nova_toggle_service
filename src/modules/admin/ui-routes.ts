@@ -9,11 +9,17 @@ import type { RequestContext } from '../config-resolution/types.js'
 
 // ─── Options ─────────────────────────────────────────────────────────────────
 
+export interface AdminUiPluginRateLimitConfig {
+  max: number
+  timeWindow: number
+}
+
 export interface AdminUiPluginOptions {
   service: AdminRulesService
   verifier: TokenVerifier
   productId: number
   registry: ManifestRegistry
+  rateLimitConfig?: AdminUiPluginRateLimitConfig
 }
 
 // ─── Plugin ───────────────────────────────────────────────────────────────────
@@ -24,7 +30,7 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
     throw new Error('adminUiPlugin requires @fastify/csrf-protection to be registered before this plugin')
   }
 
-  const { service, verifier, productId, registry } = options
+  const { service, verifier, productId, registry, rateLimitConfig } = options
 
   // ─── Auth hooks that return HTML errors ────────────────────────────────────
 
@@ -58,6 +64,7 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
 
   fastify.get('/admin', {
     preHandler: makeAdminAuthHook(verifier, ROLE_VIEWER),
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (_request, reply) => {
     return reply.redirect('/admin/features')
   })
@@ -66,6 +73,7 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
 
   fastify.get('/admin/features', {
     preHandler: viewerHtmlHook,
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (_request, reply) => {
     const allDefs = registry.getAll()
     const allRules = await service.listRules(productId)
@@ -88,6 +96,7 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
 
   fastify.get<{ Params: { key: string } }>('/admin/features/:key', {
     preHandler: viewerHtmlHook,
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (request, reply) => {
     const { key } = request.params
     const definition = registry.getByKey(key)
@@ -116,6 +125,7 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
 
   fastify.get<{ Params: { key: string } }>('/admin/features/:key/rules/new', {
     preHandler: viewerHtmlHook,
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (request, reply) => {
     const { key } = request.params
     const definition = registry.getByKey(key)
@@ -144,6 +154,7 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
 
   fastify.get<{ Params: { key: string; id: string } }>('/admin/features/:key/rules/:id/edit', {
     preHandler: viewerHtmlHook,
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (request, reply) => {
     const { key, id } = request.params
     const ruleId = parseInt(id, 10)
@@ -184,6 +195,7 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
 
   fastify.get('/admin/preview', {
     preHandler: viewerHtmlHook,
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (request, reply) => {
     const parseResult = previewQuerySchema.safeParse(request.query)
     if (!parseResult.success) {
@@ -227,6 +239,7 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
 
   fastify.get('/admin/preview/partial', {
     preHandler: viewerHtmlHook,
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (request, reply) => {
     const parseResult = previewQuerySchema.safeParse(request.query)
     if (!parseResult.success) {
@@ -264,6 +277,7 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
 
   fastify.get('/admin/revisions', {
     preHandler: viewerHtmlHook,
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (_request, reply) => {
     const revisions = await service.listRevisions(productId, 50)
     const html = await reply.viewAsync('revisions.njk', { revisions })
@@ -274,6 +288,7 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
 
   fastify.post<{ Params: { key: string }; Body: Record<string, string> }>('/admin/features/:key/rules', {
     preHandler: [editorHtmlHook, fastify.csrfProtection],
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (request, reply) => {
     const { key } = request.params
     const body = request.body ?? {}
@@ -312,6 +327,7 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
 
   fastify.post<{ Params: { key: string; id: string }; Body: Record<string, string> }>('/admin/features/:key/rules/:id', {
     preHandler: [editorHtmlHook, fastify.csrfProtection],
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (request, reply) => {
     const { key, id } = request.params
     const ruleId = parseInt(id, 10)
@@ -356,6 +372,7 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
 
   fastify.post<{ Params: { key: string; id: string }; Body: Record<string, string> }>('/admin/features/:key/rules/:id/disable', {
     preHandler: [editorHtmlHook, fastify.csrfProtection],
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (request, reply) => {
     const { key, id } = request.params
     const ruleId = parseInt(id, 10)
@@ -404,6 +421,7 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
 
   fastify.post<{ Params: { key: string }; Body: Record<string, string> }>('/admin/features/:key/quick-toggle', {
     preHandler: [editorHtmlHook, fastify.csrfProtection],
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (request, reply) => {
     const { key } = request.params
     const body = request.body ?? {}
