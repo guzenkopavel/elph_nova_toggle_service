@@ -2,7 +2,7 @@
 
 Deeper index for `elph_nova_toggle_service`.
 
-This repository is past the bootstrap stage. Task 2 delivered the initial Node.js service skeleton. The index now covers real source and test files as well as the agreed target zones that future implementation will fill.
+This repository is past the bootstrap stage. Tasks 2–5 are complete. The index now covers real source and test files as well as the agreed target zones that future implementation will fill.
 
 ## 1. Current Operational Docs
 
@@ -86,11 +86,20 @@ Delivery contour and service discovery contract:
 
 ### `src/app.ts`
 
-Fastify app factory exported as `createApp(options?)`. Accepts optional logger config. Registers plugins and modules (placeholder in Task 2). Does not call `listen()`.
+Fastify app factory exported as `createApp(options?)`. `AppOptions` now includes an optional `manifestRegistry` field; when provided, the registry's `readyCheck()` is automatically added to the health ready-check list alongside any other injectable checks. Does not call `listen()`.
 
 ### `src/server.ts`
 
-Process entry point. Calls `createApp()`, reads `env.PORT`, calls `listen()`. Exits with code 1 on startup failure.
+Process entry point. On startup: loads the manifest file, builds `ManifestRegistry`, constructs `ManifestSyncService` and registers its `driftReadyCheck()`, then calls `createApp()` and `listen()`. Exits with code 1 on any startup failure.
+
+### `src/modules/manifest`
+
+Implemented in Task 5. Four files:
+
+- `schema.ts` — zod schemas for manifest JSON; exports `Manifest`, `ManifestFeature`, `ManifestProduct` types; validates `deliveryMode`, `sourcePriorityMode`, `defaultEntry`, and optional `payload` fields.
+- `loader.ts` — `loadManifest(path)`: synchronous read, JSON parse, zod validation, SHA-256 hash of raw bytes, filter to `remoteCapable` features. Returns `{ manifest, hash, remoteCapableFeatures }`. Throws descriptive errors for file I/O, parse, and schema failures.
+- `registry.ts` — `ManifestRegistry`: in-memory `Map` of `ManifestDefinition` records keyed by feature key. `load(features, hash)` replaces the map atomically. `readyCheck()` returns a health-check function that throws if `isLoaded` is false.
+- `sync.ts` — `ManifestSyncService`: accepts `db`, `DefinitionsRepository`, and `ProductsRepository`. `sync(input)` runs fully inside a Knex transaction: upserts the product, upserts all incoming definitions, archives definitions no longer in the manifest, and updates the product's `manifest_hash`. `driftReadyCheck(productName, expectedHash)` returns a health-check function that queries the DB and throws if the stored hash differs.
 
 ### `src/config/env.ts`
 
@@ -117,7 +126,19 @@ Vitest suite covering `createApp`: instantiation without error, inject returning
 
 ### `tests/health.test.ts`
 
-5 integration tests for the health plugin: liveness always passes, readiness with no checks passes, readiness with a failing check returns 503, and injectable check arrays behave correctly.
+7 integration tests for the health plugin: liveness always passes, readiness with no checks passes, readiness with a failing check returns 503, injectable check arrays behave correctly; 2 new tests verify that an unloaded `ManifestRegistry` causes 503 and a loaded one allows 200.
+
+### `tests/modules/manifest/loader.test.ts`
+
+Unit tests for `loadManifest`: missing file error, invalid JSON error, schema validation failures, successful parse with correct hash and `remoteCapable` filter, hash stability across calls.
+
+### `tests/modules/manifest/registry.test.ts`
+
+Unit tests for `ManifestRegistry`: initial `isLoaded` false, `load()` populates map and sets hash, `getAll()` / `getByKey()` / `hasKey()` correctness, `readyCheck()` throws before load and resolves after load.
+
+### `tests/modules/manifest/sync.test.ts`
+
+Integration tests for `ManifestSyncService` against in-memory SQLite: `sync()` upserts definitions, archives keys removed from manifest, updates product `manifest_hash`; `driftReadyCheck()` resolves when hashes match and throws when they differ.
 
 ## 3. Current Tooling Scripts
 
@@ -141,9 +162,18 @@ Purpose:
 - compare actual files with `docs/REPO_MAP.md`
 - support `repo-indexer`
 
+### `scripts/sync-manifest.ts`
+
+Standalone operator CLI for manifest synchronization:
+
+- reads `MANIFEST_PATH` from env
+- calls `loadManifest()`, builds `ManifestRegistry`, runs `ManifestSyncService.sync()` in a transaction
+- logs upserted/archived counts and the manifest hash
+- exits non-zero on any failure; must be run before service startup
+
 ## 4. Planned Runtime Zones
 
-These sections describe the implementation areas expected to appear in Tasks 3–12.
+These sections describe the implementation areas expected to appear in Tasks 6–12.
 
 ### `src/db`
 
@@ -176,15 +206,6 @@ Expected responsibilities:
 - bearer token verification
 - JWKS interaction and caching
 - admin identity integration
-
-### `src/modules/manifest`
-
-Expected responsibilities:
-
-- manifest loading
-- hash calculation
-- sync step orchestration
-- remote-capable key filtering
 
 ### `src/modules/config-resolution`
 

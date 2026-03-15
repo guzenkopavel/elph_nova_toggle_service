@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { createApp } from '../src/app'
+import { ManifestRegistry } from '../src/modules/manifest/registry'
 import type { FastifyInstance } from 'fastify'
 
 describe('health routes', () => {
@@ -57,6 +58,26 @@ describe('health routes', () => {
     it('returns 200 when all ready checks pass', async () => {
       const passingCheck = async () => { /* no-op */ }
       app = await createApp({ logger: false, readyChecks: [passingCheck] })
+      await app.ready()
+      const response = await app.inject({ method: 'GET', url: '/health/ready' })
+      expect(response.statusCode).toBe(200)
+    })
+
+    it('returns 503 when manifest registry not loaded', async () => {
+      const registry = new ManifestRegistry() // not loaded
+      app = await createApp({ logger: false, manifestRegistry: registry })
+      await app.ready()
+      const response = await app.inject({ method: 'GET', url: '/health/ready' })
+      expect(response.statusCode).toBe(503)
+      const body = response.json()
+      expect(body.status).toBe('error')
+      expect(body.errors[0]).toContain('not loaded')
+    })
+
+    it('returns 200 when manifest registry is loaded', async () => {
+      const registry = new ManifestRegistry()
+      registry.load([], 'abc123') // empty but "loaded"
+      app = await createApp({ logger: false, manifestRegistry: registry })
       await app.ready()
       const response = await app.inject({ method: 'GET', url: '/health/ready' })
       expect(response.statusCode).toBe(200)

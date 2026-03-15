@@ -378,11 +378,11 @@ Source of truth:
 
 ### Критерии приёмки
 
-- [ ] Сервис не требует ручного создания feature keys
-- [ ] Импортируются только `remoteCapable` keys
-- [ ] Удалённые keys не исчезают бесследно, а архивируются
-- [ ] `manifest_hash` обновляется и используется в readiness logic
-- [ ] `sync-manifest` является отдельным шагом, а не hidden startup side effect
+- [x] Сервис не требует ручного создания feature keys
+- [x] Импортируются только `remoteCapable` keys
+- [x] Удалённые keys не исчезают бесследно, а архивируются
+- [x] `manifest_hash` обновляется и используется в readiness logic
+- [x] `sync-manifest` является отдельным шагом, а не hidden startup side effect
 
 ---
 

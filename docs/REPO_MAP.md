@@ -2,7 +2,7 @@
 
 Repository map for `elph_nova_toggle_service`.
 
-Current state: Tasks 1–4 are complete. The files below reflect what exists now, plus an explicitly marked target structure for the remaining service implementation.
+Current state: Tasks 1–5 are complete. The files below reflect what exists now, plus an explicitly marked target structure for the remaining service implementation.
 
 ## Scope And Exclusions
 
@@ -108,6 +108,8 @@ Excluded from indexing by default:
   - narrow repo search helper for agent workflows
 - `scripts/find-unmapped-files.sh`
   - helper for repo-indexer to find files not yet mentioned in `docs/REPO_MAP.md`
+- `scripts/sync-manifest.ts`
+  - standalone CLI: loads manifest from `MANIFEST_PATH`, builds registry, runs `ManifestSyncService.sync()`, exits non-zero on failure
 
 ## Root Config Files
 
@@ -121,9 +123,9 @@ Excluded from indexing by default:
 ## `src`
 
 - `src/app.ts`
-  - Fastify app factory (`createApp`); wires plugins and modules; does not call `listen()`
+  - Fastify app factory (`createApp`); accepts optional `manifestRegistry` in `AppOptions` and auto-registers its `readyCheck()` alongside any other injectable checks
 - `src/server.ts`
-  - process bootstrap: calls `createApp` then `listen()`
+  - process bootstrap: loads manifest, builds `ManifestRegistry`, registers drift check, calls `createApp` then `listen()`
 - `src/config/env.ts`
   - full stage-1 zod schema for all env variables; throws on invalid values, uses defaults for optional keys
 - `src/shared/logger.ts`
@@ -169,6 +171,17 @@ Excluded from indexing by default:
 - `src/modules/revisions/repository.ts`
   - `RevisionsRepository` interface and `DefaultRevisionsRepository`; advances the monotonic revision and stores config snapshots
 
+## `src/modules/manifest`
+
+- `src/modules/manifest/schema.ts`
+  - zod schemas for manifest validation; exports `Manifest`, `ManifestFeature`, `ManifestProduct` types
+- `src/modules/manifest/loader.ts`
+  - `loadManifest(path)`: synchronous file read, JSON parse, zod validation, SHA-256 hash, `remoteCapable` filter; returns `LoadManifestResult`
+- `src/modules/manifest/registry.ts`
+  - `ManifestRegistry`: in-memory map of `remoteCapable` definitions keyed by feature key; exposes `load()`, `getAll()`, `getByKey()`, `hasKey()`, `readyCheck()`
+- `src/modules/manifest/sync.ts`
+  - `ManifestSyncService`: fully transactional `sync()` upserts active definitions and archives removed keys; `driftReadyCheck()` verifies DB hash matches loaded manifest hash at startup
+
 ## `tests`
 
 - `tests/app.test.ts`
@@ -176,11 +189,17 @@ Excluded from indexing by default:
 - `tests/config/env.test.ts`
   - 8 unit tests covering parseEnv validation branches (missing required vars, invalid types, defaults)
 - `tests/health.test.ts`
-  - 5 integration tests for /health/live and /health/ready routes (liveness, readiness pass/fail, injectable checks)
+  - 7 integration tests for /health/live and /health/ready routes; includes 2 new manifest registry ready-check cases (unloaded → 503, loaded → 200)
 - `tests/db/migrations.test.ts`
   - migration correctness and idempotency tests: up/down round-trip for all four migrations against an in-memory SQLite instance
 - `tests/db/repositories.test.ts`
   - integration tests for all four repository implementations and the `withTransaction` helper against an in-memory SQLite instance
+- `tests/modules/manifest/loader.test.ts`
+  - unit tests for `loadManifest`: missing file, invalid JSON, schema violations, valid manifest parsing, hash stability, remoteCapable filter
+- `tests/modules/manifest/registry.test.ts`
+  - unit tests for `ManifestRegistry`: initial state, `load()` / `getAll()` / `getByKey()` / `hasKey()`, `readyCheck()` pass/fail
+- `tests/modules/manifest/sync.test.ts`
+  - integration tests for `ManifestSyncService.sync()`: upsert, archive of removed keys, hash update, `driftReadyCheck()` pass/fail
 
 ## Target Service Structure
 
@@ -192,8 +211,6 @@ The paths below are planned but not yet created. They represent the intended imp
   - admin routes, forms, services, and auth integration
 - `src/modules/auth/*`
   - JWT/JWKS verification and auth helpers
-- `src/modules/manifest/*`
-  - manifest loading, registry, and sync logic
 - `src/modules/config-resolution/*`
   - rule specificity, compilation, and response assembly
 - `src/views/*`

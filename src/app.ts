@@ -2,11 +2,13 @@ import Fastify, { FastifyInstance } from 'fastify'
 import healthPlugin from './modules/health/index'
 import { createLogger } from './shared/logger'
 import type { Env } from './config/env'
+import type { ManifestRegistry } from './modules/manifest/registry'
 
 export interface AppOptions {
   logger?: boolean | object
   env?: Pick<Env, 'LOG_LEVEL' | 'TRUST_PROXY'>
   readyChecks?: Array<() => Promise<void>>
+  manifestRegistry?: ManifestRegistry
 }
 
 export async function createApp(options: AppOptions = {}): Promise<FastifyInstance> {
@@ -22,8 +24,14 @@ export async function createApp(options: AppOptions = {}): Promise<FastifyInstan
     trustProxy: options.env?.TRUST_PROXY ?? false,
   })
 
+  const allReadyChecks = [...(options.readyChecks ?? [])]
+
+  if (options.manifestRegistry) {
+    allReadyChecks.push(options.manifestRegistry.readyCheck())
+  }
+
   await app.register(healthPlugin, {
-    readyChecks: options.readyChecks ?? [],
+    readyChecks: allReadyChecks,
   })
 
   return app

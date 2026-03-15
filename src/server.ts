@@ -1,15 +1,34 @@
+import path from 'path'
 import { parseEnv } from './config/env'
 import { createLogger } from './shared/logger'
 import { createApp } from './app'
+import { db as defaultDb } from './db/knex'
+import { loadManifest } from './modules/manifest/loader'
+import { ManifestRegistry } from './modules/manifest/registry'
+import { ManifestSyncService } from './modules/manifest/sync'
+import { DefaultDefinitionsRepository } from './modules/definitions/repository'
+import { DefaultProductsRepository } from './modules/products/repository'
 
 async function start() {
   try {
     const env = parseEnv()
     const logger = createLogger({ LOG_LEVEL: env.LOG_LEVEL })
 
+    const manifestPath = path.resolve(env.MANIFEST_PATH)
+    const { manifest, hash, remoteCapableFeatures } = loadManifest(manifestPath)
+
+    const manifestRegistry = new ManifestRegistry()
+    manifestRegistry.load(remoteCapableFeatures, hash)
+
+    const definitionsRepo = new DefaultDefinitionsRepository(defaultDb)
+    const productsRepo = new DefaultProductsRepository(defaultDb)
+    const syncService = new ManifestSyncService(defaultDb, definitionsRepo, productsRepo)
+    const driftCheck = syncService.driftReadyCheck(manifest.product.id, hash)
+
     const app = await createApp({
       env,
-      readyChecks: [],
+      readyChecks: [driftCheck],
+      manifestRegistry,
       // Reuse the already-constructed logger — avoids duplicating redact config
       logger: logger as object,
     })
