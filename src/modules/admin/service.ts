@@ -3,8 +3,9 @@ import { withTransaction } from '../../db/transaction.js'
 import type { ManifestRegistry } from '../manifest/registry.js'
 import type { DefaultRulesRepository, RuleRow } from '../rules/repository.js'
 import type { DefaultProductsRepository } from '../products/repository.js'
-import type { DefaultRevisionsRepository } from '../revisions/repository.js'
+import type { DefaultRevisionsRepository, RevisionRow } from '../revisions/repository.js'
 import type { ConfigResolutionService } from '../config-resolution/service.js'
+import type { CompiledSnapshot, RequestContext } from '../config-resolution/types.js'
 import { detectAmbiguousOverlap } from '../config-resolution/specificity.js'
 
 export class ValidationError extends Error {
@@ -135,6 +136,7 @@ export class AdminRulesService {
       }, trx)
     })
 
+    // invalidateCache must run synchronously after the transaction commits — no await between here and the transaction.
     this.resolutionService.invalidateCache(input.productId)
     return createdRule
   }
@@ -208,6 +210,7 @@ export class AdminRulesService {
       }, trx)
     })
 
+    // invalidateCache must run synchronously after the transaction commits — no await between here and the transaction.
     this.resolutionService.invalidateCache(input.productId)
     return updatedRule
   }
@@ -258,6 +261,7 @@ export class AdminRulesService {
       }, trx)
     })
 
+    // invalidateCache must run synchronously after the transaction commits — no await between here and the transaction.
     this.resolutionService.invalidateCache(input.productId)
   }
 
@@ -269,6 +273,20 @@ export class AdminRulesService {
     const rule = await this.rulesRepo.findById(ruleId)
     if (!rule) throw new NotFoundError(`Rule ${ruleId} not found`)
     return rule
+  }
+
+  async previewConfig(productId: number, ctx: RequestContext): Promise<CompiledSnapshot> {
+    return await this.resolutionService.resolveConfig(productId, ctx)
+  }
+
+  async getCurrentRevision(productId: number): Promise<number> {
+    const product = await this.productsRepo.findById(productId)
+    if (!product) throw new NotFoundError(`Product ${productId} not found`)
+    return product.current_revision
+  }
+
+  async listRevisions(productId: number, limit: number): Promise<RevisionRow[]> {
+    return await this.revisionsRepo.listByProduct(productId, limit)
   }
 
   private validateEntryJson(featureKey: string, entryJson: Record<string, unknown>): void {

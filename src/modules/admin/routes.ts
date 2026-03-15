@@ -4,6 +4,7 @@ import type { AdminRulesService } from './service.js'
 import type { TokenVerifier } from '../auth/token-verifier.js'
 import { makeAdminAuthHook, ROLE_VIEWER, ROLE_EDITOR } from './auth.js'
 import { ValidationError, ConflictError, NotFoundError } from './service.js'
+import type { RequestContext } from '../config-resolution/types.js'
 
 export interface AdminPluginOptions {
   service: AdminRulesService
@@ -15,6 +16,18 @@ export interface AdminPluginOptions {
 
 const audienceSchema = z.enum(['all', 'anonymous', 'authenticated'])
 const platformSchema = z.enum(['all', 'ios', 'android', 'web', 'desktop'])
+
+// ─── Preview / revisions query schemas ────────────────────────────────────────
+
+const previewQuerySchema = z.object({
+  platform: z.enum(['ios', 'android', 'web', 'desktop']),
+  appVersion: z.string().min(1),
+  audience: z.enum(['anonymous', 'authenticated']).default('anonymous'),
+})
+
+const revisionsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+})
 
 const createRuleBodySchema = z.object({
   feature_key: z.string().min(1),
@@ -150,6 +163,52 @@ const adminPlugin: FastifyPluginAsync<AdminPluginOptions> = async (fastify, opti
         changedBy: request.adminSub ?? 'unknown',
       })
       return reply.code(200).send({ ok: true })
+    } catch (err) {
+      return handleServiceError(err, reply)
+    }
+  })
+
+  // GET /admin/api/preview — preview resolved config for given context
+  fastify.get('/admin/api/preview', {
+    preHandler: viewerHook,
+  }, async (request, reply) => {
+    const parseResult = previewQuerySchema.safeParse(request.query)
+    if (!parseResult.success) {
+      return reply.code(400).send({ error: parseResult.error.errors[0]?.message ?? 'Invalid query parameters' })
+    }
+    const { platform, appVersion, audience } = parseResult.data
+
+    const ctx: RequestContext = {
+      authState: audience,
+      platform,
+      appVersion,
+    }
+
+    try {
+      const snapshot = await service.previewConfig(productId, ctx)
+      return reply.code(200).send({
+        version: snapshot.revision,
+        ttl: snapshot.ttl,
+        features: snapshot.features,
+      })
+    } catch (err) {
+      return handleServiceError(err, reply)
+    }
+  })
+
+  // GET /admin/api/revisions — list recent revisions for the product
+  fastify.get('/admin/api/revisions', {
+    preHandler: viewerHook,
+  }, async (request, reply) => {
+    const parseResult = revisionsQuerySchema.safeParse(request.query)
+    if (!parseResult.success) {
+      return reply.code(400).send({ error: parseResult.error.errors[0]?.message ?? 'Invalid query parameters' })
+    }
+    const { limit } = parseResult.data
+
+    try {
+      const revisions = await service.listRevisions(productId, limit)
+      return reply.code(200).send({ revisions })
     } catch (err) {
       return handleServiceError(err, reply)
     }

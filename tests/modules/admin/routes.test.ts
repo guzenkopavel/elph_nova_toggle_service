@@ -750,6 +750,402 @@ describe('Admin routes', () => {
     }
   })
 
+  // ─── PR: Preview endpoint ─────────────────────────────────────────────────
+
+  describe('Preview endpoint (PR)', () => {
+    it('PR1: no auth → 401', async () => {
+      const app = await buildApp(anonVerifier())
+      try {
+        const res = await app.inject({ method: 'GET', url: '/admin/api/preview?platform=ios&appVersion=1.0.0' })
+        expect(res.statusCode).toBe(401)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('PR2: invalid token → 401', async () => {
+      const app = await buildApp(invalidTokenVerifier())
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/admin/api/preview?platform=ios&appVersion=1.0.0',
+          headers: { Authorization: 'Bearer bad' },
+        })
+        expect(res.statusCode).toBe(401)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('PR3: infra error → 503', async () => {
+      const app = await buildApp(infraErrorVerifier())
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/admin/api/preview?platform=ios&appVersion=1.0.0',
+          headers: { Authorization: 'Bearer any' },
+        })
+        expect(res.statusCode).toBe(503)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('PR4: viewer + valid params anonymous → 200 with version/ttl/features', async () => {
+      const app = await buildApp(viewerVerifier())
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/admin/api/preview?platform=ios&appVersion=1.0.0&audience=anonymous',
+          headers: { Authorization: 'Bearer viewer-token' },
+        })
+        expect(res.statusCode).toBe(200)
+        const body = res.json<{ version: number; ttl: number; features: Record<string, unknown> }>()
+        expect(typeof body.version).toBe('number')
+        expect(typeof body.ttl).toBe('number')
+        expect(typeof body.features).toBe('object')
+        expect(body.features).toHaveProperty('chat')
+        expect(body.features).toHaveProperty('video_call')
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('PR5: viewer + authenticated audience → 200', async () => {
+      const app = await buildApp(viewerVerifier())
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/admin/api/preview?platform=android&appVersion=2.0.0&audience=authenticated',
+          headers: { Authorization: 'Bearer viewer-token' },
+        })
+        expect(res.statusCode).toBe(200)
+        const body = res.json<{ version: number; ttl: number; features: Record<string, unknown> }>()
+        expect(typeof body.version).toBe('number')
+        expect(body.features).toHaveProperty('chat')
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('PR6: missing platform → 400', async () => {
+      const app = await buildApp(viewerVerifier())
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/admin/api/preview?appVersion=1.0.0',
+          headers: { Authorization: 'Bearer viewer-token' },
+        })
+        expect(res.statusCode).toBe(400)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('PR7: missing appVersion → 400', async () => {
+      const app = await buildApp(viewerVerifier())
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/admin/api/preview?platform=ios',
+          headers: { Authorization: 'Bearer viewer-token' },
+        })
+        expect(res.statusCode).toBe(400)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('PR8: invalid platform value (e.g. fax) → 400', async () => {
+      const app = await buildApp(viewerVerifier())
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/admin/api/preview?platform=fax&appVersion=1.0.0',
+          headers: { Authorization: 'Bearer viewer-token' },
+        })
+        expect(res.statusCode).toBe(400)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('PR9: platform=all → 400', async () => {
+      const app = await buildApp(viewerVerifier())
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/admin/api/preview?platform=all&appVersion=1.0.0',
+          headers: { Authorization: 'Bearer viewer-token' },
+        })
+        expect(res.statusCode).toBe(400)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('PR10: audience=all → 400', async () => {
+      const app = await buildApp(viewerVerifier())
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/admin/api/preview?platform=ios&appVersion=1.0.0&audience=all',
+          headers: { Authorization: 'Bearer viewer-token' },
+        })
+        expect(res.statusCode).toBe(400)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('PR11: after creating a rule, preview reflects it', async () => {
+      // Create a rule that enables chat for ios authenticated
+      await adminService.createRule({
+        productId,
+        feature_key: 'chat',
+        audience: 'authenticated',
+        platform: 'ios',
+        entry_json: { isEnabled: true },
+        reason: 'enable chat ios auth',
+        expectedRevision: 0,
+      })
+
+      const app = await buildApp(viewerVerifier())
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/admin/api/preview?platform=ios&appVersion=1.0.0&audience=authenticated',
+          headers: { Authorization: 'Bearer viewer-token' },
+        })
+        expect(res.statusCode).toBe(200)
+        const body = res.json<{ features: { chat: { isEnabled: boolean } } }>()
+        expect(body.features.chat.isEnabled).toBe(true)
+
+        // Anonymous should still see default (false)
+        const anonRes = await app.inject({
+          method: 'GET',
+          url: '/admin/api/preview?platform=ios&appVersion=1.0.0&audience=anonymous',
+          headers: { Authorization: 'Bearer viewer-token' },
+        })
+        expect(anonRes.statusCode).toBe(200)
+        const anonBody = anonRes.json<{ features: { chat: { isEnabled: boolean } } }>()
+        expect(anonBody.features.chat.isEnabled).toBe(false)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('PR12: preview does NOT increment current_revision', async () => {
+      const before = await db('products').where({ id: productId }).first()
+      const revBefore = before.current_revision
+
+      const app = await buildApp(viewerVerifier())
+      try {
+        await app.inject({
+          method: 'GET',
+          url: '/admin/api/preview?platform=ios&appVersion=1.0.0&audience=anonymous',
+          headers: { Authorization: 'Bearer viewer-token' },
+        })
+      } finally {
+        await app.close()
+      }
+
+      const after = await db('products').where({ id: productId }).first()
+      expect(after.current_revision).toBe(revBefore)
+    })
+
+    it('PR13: preview does NOT insert a config_revisions row', async () => {
+      const countBefore = await db('config_revisions').where({ product_id: productId }).count('id as cnt').first()
+      const cntBefore = Number((countBefore as { cnt: number | string }).cnt)
+
+      const app = await buildApp(viewerVerifier())
+      try {
+        await app.inject({
+          method: 'GET',
+          url: '/admin/api/preview?platform=ios&appVersion=1.0.0&audience=anonymous',
+          headers: { Authorization: 'Bearer viewer-token' },
+        })
+      } finally {
+        await app.close()
+      }
+
+      const countAfter = await db('config_revisions').where({ product_id: productId }).count('id as cnt').first()
+      const cntAfter = Number((countAfter as { cnt: number | string }).cnt)
+      expect(cntAfter).toBe(cntBefore)
+    })
+  })
+
+  // ─── RV: Revisions list endpoint ──────────────────────────────────────────
+
+  describe('Revisions list endpoint (RV)', () => {
+    it('RV1: no auth → 401', async () => {
+      const app = await buildApp(anonVerifier())
+      try {
+        const res = await app.inject({ method: 'GET', url: '/admin/api/revisions' })
+        expect(res.statusCode).toBe(401)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('RV2: viewer + no revisions → 200 {revisions: []}', async () => {
+      const app = await buildApp(viewerVerifier())
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/admin/api/revisions',
+          headers: { Authorization: 'Bearer viewer-token' },
+        })
+        expect(res.statusCode).toBe(200)
+        const body = res.json<{ revisions: unknown[] }>()
+        expect(body.revisions).toEqual([])
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('RV3: after two writes, returns 2 entries ordered by revision desc', async () => {
+      await adminService.createRule({
+        productId,
+        feature_key: 'chat',
+        audience: 'all',
+        platform: 'all',
+        entry_json: { isEnabled: true },
+        reason: 'first write',
+        expectedRevision: 0,
+      })
+      await adminService.createRule({
+        productId,
+        feature_key: 'video_call',
+        audience: 'all',
+        platform: 'all',
+        entry_json: { isEnabled: true },
+        reason: 'second write',
+        expectedRevision: 1,
+      })
+
+      const app = await buildApp(viewerVerifier())
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/admin/api/revisions',
+          headers: { Authorization: 'Bearer viewer-token' },
+        })
+        expect(res.statusCode).toBe(200)
+        const body = res.json<{ revisions: Array<{ revision: number }> }>()
+        expect(body.revisions).toHaveLength(2)
+        expect(body.revisions[0].revision).toBeGreaterThan(body.revisions[1].revision)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('RV4: limit=1 returns 1 entry', async () => {
+      await adminService.createRule({
+        productId,
+        feature_key: 'chat',
+        audience: 'all',
+        platform: 'all',
+        entry_json: { isEnabled: true },
+        reason: 'write for limit test',
+        expectedRevision: 0,
+      })
+      await adminService.createRule({
+        productId,
+        feature_key: 'video_call',
+        audience: 'all',
+        platform: 'all',
+        entry_json: { isEnabled: true },
+        reason: 'write 2',
+        expectedRevision: 1,
+      })
+
+      const app = await buildApp(viewerVerifier())
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/admin/api/revisions?limit=1',
+          headers: { Authorization: 'Bearer viewer-token' },
+        })
+        expect(res.statusCode).toBe(200)
+        const body = res.json<{ revisions: unknown[] }>()
+        expect(body.revisions).toHaveLength(1)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('RV5: no limit param defaults to 50, returns all available (≤50)', async () => {
+      // Create 3 writes
+      await adminService.createRule({
+        productId,
+        feature_key: 'chat',
+        audience: 'all',
+        platform: 'all',
+        entry_json: { isEnabled: true },
+        reason: 'write 1',
+        expectedRevision: 0,
+      })
+
+      const app = await buildApp(viewerVerifier())
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/admin/api/revisions',
+          headers: { Authorization: 'Bearer viewer-token' },
+        })
+        expect(res.statusCode).toBe(200)
+        const body = res.json<{ revisions: unknown[] }>()
+        expect(body.revisions.length).toBeGreaterThanOrEqual(1)
+        expect(body.revisions.length).toBeLessThanOrEqual(50)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('RV6: limit=0 → 400', async () => {
+      const app = await buildApp(viewerVerifier())
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/admin/api/revisions?limit=0',
+          headers: { Authorization: 'Bearer viewer-token' },
+        })
+        expect(res.statusCode).toBe(400)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('RV7: limit=abc → 400', async () => {
+      const app = await buildApp(viewerVerifier())
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/admin/api/revisions?limit=abc',
+          headers: { Authorization: 'Bearer viewer-token' },
+        })
+        expect(res.statusCode).toBe(400)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('RV8: editor token → 200', async () => {
+      const app = await buildApp(editorVerifier())
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/admin/api/revisions',
+          headers: { Authorization: 'Bearer editor-token' },
+        })
+        expect(res.statusCode).toBe(200)
+      } finally {
+        await app.close()
+      }
+    })
+  })
+
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
   async function buildApp(verifier: TokenVerifier): Promise<FastifyInstance> {

@@ -62,12 +62,13 @@ export class ConfigResolutionService {
 
     const parsedDefaults = new Map<string, ResolvedEntry>()
     for (const def of definitions) {
-      parsedDefaults.set(def.feature_key, parseEntryJson(def.default_entry_json, def.feature_key))
+      // Object.freeze prevents accidental mutation of shared snapshot data across concurrent requests.
+      parsedDefaults.set(def.feature_key, Object.freeze(parseEntryJson(def.default_entry_json, def.feature_key)))
     }
 
     const parsedRules = rules.map(rule => ({
       ...rule,
-      parsedEntry: parseEntryJson(rule.entry_json, rule.feature_key),
+      parsedEntry: Object.freeze(parseEntryJson(rule.entry_json, rule.feature_key)),
     }))
 
     return {
