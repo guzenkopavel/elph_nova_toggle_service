@@ -88,9 +88,12 @@ src/
 
 ### Config Resolution Module
 
-- assemble the resolved snapshot
-- choose the most specific applicable rule
-- maintain compiled in-memory snapshots keyed by revision
+- assemble the resolved snapshot from manifest defaults and active rules
+- choose the most specific applicable rule via explicit specificity ordering
+- detect ambiguous overlap between rules of equal specificity (used by admin write validation in Task 9)
+- maintain compiled in-memory snapshots keyed by `productId:revision`; the cache stores `Promise<ParsedSnapshot>` to prevent cache stampede under concurrent requests
+- JSON parsing is done once at snapshot build time, not per request
+- `invalidateCache` must be called after a write transaction commits, never inside it
 
 ### Definition, Rule, Revision Modules
 

@@ -8,6 +8,9 @@ import { ManifestRegistry } from './modules/manifest/registry'
 import { ManifestSyncService } from './modules/manifest/sync'
 import { DefaultDefinitionsRepository } from './modules/definitions/repository'
 import { DefaultProductsRepository } from './modules/products/repository'
+import { DefaultRulesRepository } from './modules/rules/repository'
+import { ConfigResolutionService } from './modules/config-resolution/service'
+import { createTokenVerifier } from './modules/auth/token-verifier'
 
 async function start() {
   try {
@@ -23,7 +26,24 @@ async function start() {
     const definitionsRepo = new DefaultDefinitionsRepository(defaultDb)
     const productsRepo = new DefaultProductsRepository(defaultDb)
     const syncService = new ManifestSyncService(defaultDb, definitionsRepo, productsRepo)
-    const driftCheck = syncService.driftReadyCheck(manifest.product.id, hash)
+    const driftCheck = syncService.driftReadyCheck(env.DEFAULT_PRODUCT_ID, hash)
+
+    // Resolve numeric productId from the product name. upsertByName is idempotent —
+    // it inserts if absent (handles first run before sync-manifest) and returns the row.
+    // sync-manifest is still required before production use to populate definitions.
+    const productRow = await productsRepo.upsertByName(env.DEFAULT_PRODUCT_ID)
+    const productId = productRow.id
+    logger.info({ productName: env.DEFAULT_PRODUCT_ID, productId }, 'Resolved product')
+
+    const rulesRepo = new DefaultRulesRepository(defaultDb)
+    const resolutionService = new ConfigResolutionService(productsRepo, definitionsRepo, rulesRepo)
+
+    const tokenVerifier = createTokenVerifier({
+      jwksUri: env.SSO_JWKS_URI,
+      issuer: env.SSO_ISSUER,
+      audience: env.SSO_AUDIENCE,
+      jwksTimeoutMs: env.SSO_JWKS_TIMEOUT_MS,
+    })
 
     const app = await createApp({
       env,
@@ -31,6 +51,7 @@ async function start() {
       manifestRegistry,
       // Reuse the already-constructed logger — avoids duplicating redact config
       logger: logger as object,
+      publicOptions: { resolutionService, productId, tokenVerifier },
     })
 
     let closing = false

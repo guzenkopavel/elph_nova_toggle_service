@@ -48,4 +48,90 @@ describe('parseEnv', () => {
     expect(env.SSO_JWKS_URI).toBeUndefined()
     expect(env.ADMIN_SESSION_SECRET).toBeUndefined()
   })
+
+  it('SSO_JWKS_TIMEOUT_MS defaults to 3000', () => {
+    const env = parseEnv({})
+    expect(env.SSO_JWKS_TIMEOUT_MS).toBe(3000)
+  })
+
+  it('SSO_JWKS_TIMEOUT_MS coerces from string', () => {
+    const env = parseEnv({ SSO_JWKS_TIMEOUT_MS: '5000' })
+    expect(env.SSO_JWKS_TIMEOUT_MS).toBe(5000)
+  })
+
+  it('SSO_JWKS_TIMEOUT_MS rejects zero', () => {
+    expect(() => parseEnv({ SSO_JWKS_TIMEOUT_MS: '0' })).toThrow()
+  })
+
+  it('SSO_JWKS_TIMEOUT_MS rejects negative value', () => {
+    expect(() => parseEnv({ SSO_JWKS_TIMEOUT_MS: '-1' })).toThrow()
+  })
+
+  describe('cross-field SSO validation in non-development environments', () => {
+    it('allows SSO_JWKS_URI without issuer/audience in development', () => {
+      expect(() =>
+        parseEnv({
+          NODE_ENV: 'development',
+          SSO_JWKS_URI: 'https://sso.example.com/.well-known/jwks.json',
+        }),
+      ).not.toThrow()
+    })
+
+    it('allows SSO_JWKS_URI without issuer/audience in test', () => {
+      expect(() =>
+        parseEnv({
+          NODE_ENV: 'test',
+          SSO_JWKS_URI: 'https://sso.example.com/.well-known/jwks.json',
+        }),
+      ).not.toThrow()
+    })
+
+    it('rejects SSO_JWKS_URI without SSO_ISSUER in staging', () => {
+      expect(() =>
+        parseEnv({
+          NODE_ENV: 'staging',
+          SSO_JWKS_URI: 'https://sso.example.com/.well-known/jwks.json',
+          SSO_AUDIENCE: 'feature-config-service',
+        }),
+      ).toThrow('SSO_ISSUER')
+    })
+
+    it('rejects SSO_JWKS_URI without SSO_AUDIENCE in staging', () => {
+      expect(() =>
+        parseEnv({
+          NODE_ENV: 'staging',
+          SSO_JWKS_URI: 'https://sso.example.com/.well-known/jwks.json',
+          SSO_ISSUER: 'https://sso.example.com',
+        }),
+      ).toThrow('SSO_AUDIENCE')
+    })
+
+    it('rejects SSO_JWKS_URI without SSO_ISSUER in production', () => {
+      expect(() =>
+        parseEnv({
+          NODE_ENV: 'production',
+          SSO_JWKS_URI: 'https://sso.example.com/.well-known/jwks.json',
+          SSO_AUDIENCE: 'feature-config-service',
+        }),
+      ).toThrow('SSO_ISSUER')
+    })
+
+    it('accepts SSO_JWKS_URI with both issuer and audience in production', () => {
+      const env = parseEnv({
+        NODE_ENV: 'production',
+        SSO_JWKS_URI: 'https://sso.example.com/.well-known/jwks.json',
+        SSO_ISSUER: 'https://sso.example.com',
+        SSO_AUDIENCE: 'feature-config-service',
+      })
+      expect(env.SSO_JWKS_URI).toBe('https://sso.example.com/.well-known/jwks.json')
+    })
+
+    it('accepts absent SSO_JWKS_URI in production without requiring issuer/audience', () => {
+      expect(() =>
+        parseEnv({
+          NODE_ENV: 'production',
+        }),
+      ).not.toThrow()
+    })
+  })
 })

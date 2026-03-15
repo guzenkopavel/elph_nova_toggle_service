@@ -21,6 +21,7 @@ const envSchema = z.object({
   SSO_JWKS_URI: z.string().url().optional(),
   SSO_ISSUER: z.string().optional(),
   SSO_AUDIENCE: z.string().optional(),
+  SSO_JWKS_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(3000),
 
   // Admin session
   ADMIN_SESSION_SECRET: z.string().min(32).optional(),
@@ -31,6 +32,23 @@ const envSchema = z.object({
 
   // CORS
   CORS_ALLOWED_ORIGINS: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.SSO_JWKS_URI && data.NODE_ENV !== 'development' && data.NODE_ENV !== 'test') {
+    if (!data.SSO_ISSUER) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'SSO_ISSUER is required when SSO_JWKS_URI is configured in non-development environments',
+        path: ['SSO_ISSUER'],
+      })
+    }
+    if (!data.SSO_AUDIENCE) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'SSO_AUDIENCE is required when SSO_JWKS_URI is configured in non-development environments',
+        path: ['SSO_AUDIENCE'],
+      })
+    }
+  }
 })
 
 export type Env = z.infer<typeof envSchema>

@@ -25,6 +25,7 @@ export interface RulesRepository {
   disable(id: number, updatedBy: string, trx?: Knex.Transaction): Promise<void>
   findById(id: number): Promise<RuleRow | undefined>
   listActiveByKey(productId: number, featureKey: string): Promise<RuleRow[]>
+  listAllActive(productId: number, trx?: Knex.Transaction): Promise<RuleRow[]>
 }
 
 export class DefaultRulesRepository implements RulesRepository {
@@ -85,6 +86,12 @@ export class DefaultRulesRepository implements RulesRepository {
   async listActiveByKey(productId: number, featureKey: string): Promise<RuleRow[]> {
     const rows = await this.db<RuleRow>('feature_rules')
       .where({ product_id: productId, feature_key: featureKey, is_active: true })
+    return rows.map((r) => this.coerce(r))
+  }
+
+  async listAllActive(productId: number, trx?: Knex.Transaction): Promise<RuleRow[]> {
+    const qb = (trx ?? this.db)<RuleRow>('feature_rules')
+    const rows = await qb.where({ product_id: productId, is_active: true }).orderBy('id', 'asc').select('*')
     return rows.map((r) => this.coerce(r))
   }
 }

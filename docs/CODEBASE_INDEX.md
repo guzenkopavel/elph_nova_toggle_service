@@ -2,7 +2,7 @@
 
 Deeper index for `elph_nova_toggle_service`.
 
-This repository is past the bootstrap stage. Tasks 2–5 are complete. The index now covers real source and test files as well as the agreed target zones that future implementation will fill.
+This repository is past the bootstrap stage. Tasks 1–8 are complete. The index now covers real source and test files as well as the agreed target zones that future implementation will fill.
 
 ## 1. Current Operational Docs
 
@@ -86,11 +86,11 @@ Delivery contour and service discovery contract:
 
 ### `src/app.ts`
 
-Fastify app factory exported as `createApp(options?)`. `AppOptions` now includes an optional `manifestRegistry` field; when provided, the registry's `readyCheck()` is automatically added to the health ready-check list alongside any other injectable checks. Does not call `listen()`.
+Fastify app factory exported as `createApp(options?)`. `AppOptions` accepts optional `manifestRegistry` (adds its `readyCheck()` to the health list), `readyChecks` (extra injectable checks), and `publicOptions` (`PublicOptions` with `resolutionService`, numeric `productId`, and `tokenVerifier: TokenVerifier`). Conditionally registers the public plugin when `publicOptions` is present. Does not call `listen()`.
 
 ### `src/server.ts`
 
-Process entry point. On startup: loads the manifest file, builds `ManifestRegistry`, constructs `ManifestSyncService` and registers its `driftReadyCheck()`, then calls `createApp()` and `listen()`. Exits with code 1 on any startup failure.
+Process entry point. On startup: loads the manifest, builds `ManifestRegistry`, constructs `ManifestSyncService` and registers its `driftReadyCheck()`; resolves numeric `productId` via `upsertByName(env.DEFAULT_PRODUCT_ID)` (idempotent, handles first-run before sync-manifest); constructs `ConfigResolutionService` with `DefaultProductsRepository`, `DefaultDefinitionsRepository`, and `DefaultRulesRepository`; constructs `TokenVerifier` from env (`jwksUri`, `issuer`, `audience`, `jwksTimeoutMs`); passes `publicOptions` (including `tokenVerifier`) to `createApp`, then calls `listen()`. Exits with code 1 on any startup failure.
 
 ### `src/modules/manifest`
 
@@ -103,7 +103,7 @@ Implemented in Task 5. Four files:
 
 ### `src/config/env.ts`
 
-Full stage-1 zod schema covering all service env variables (not just `NODE_ENV`/`PORT`). Throws at module load time on invalid values. Exports typed `Env` type and singleton `env` instance.
+Full stage-1 zod schema covering all service env variables (not just `NODE_ENV`/`PORT`). Added in Task 8: `SSO_JWKS_TIMEOUT_MS` (optional integer, default 3000 ms) and a `superRefine` cross-field check that requires both `SSO_ISSUER` and `SSO_AUDIENCE` to be present when `SSO_JWKS_URI` is set in staging or production. Throws at module load time on invalid values. Exports typed `Env` type and singleton `env` instance.
 
 ### `src/shared/logger.ts`
 
@@ -122,7 +122,7 @@ Vitest suite covering `createApp`: instantiation without error, inject returning
 
 ### `tests/config/env.test.ts`
 
-8 unit tests for `parseEnv`: missing required variables, invalid types, accepted defaults, and full valid input.
+19 unit tests for `parseEnv`: missing required variables, invalid types, accepted defaults, and full valid input (original 8 cases); plus 11 new cases added in Task 8 covering `SSO_JWKS_TIMEOUT_MS` default value, explicit override, and the cross-field enforcement that rejects `SSO_JWKS_URI` in staging/production without `SSO_ISSUER` and `SSO_AUDIENCE`.
 
 ### `tests/health.test.ts`
 
@@ -139,6 +139,47 @@ Unit tests for `ManifestRegistry`: initial `isLoaded` false, `load()` populates 
 ### `tests/modules/manifest/sync.test.ts`
 
 Integration tests for `ManifestSyncService` against in-memory SQLite: `sync()` upserts definitions, archives keys removed from manifest, updates product `manifest_hash`; `driftReadyCheck()` resolves when hashes match and throws when they differ.
+
+### `src/modules/rules/repository.ts`
+
+`RulesRepository` interface and `DefaultRulesRepository`. Existing methods: `create`, `update`, `disable`, `findById`, `listActiveByKey`. Added in Task 6: `listAllActive(productId, trx?)` — returns all active rules for a product across all feature keys, ordered by id ascending. Used by `ConfigResolutionService._loadParsedSnapshot` to load rules in a single query.
+
+### `src/modules/config-resolution`
+
+Implemented in Task 6. Three files:
+
+- `types.ts` — shared domain types: `AuthState` (`'anonymous' | 'authenticated'`), `Platform`, `RequestContext` (authState + platform + appVersion), `ResolvedEntry` (open object with required `isEnabled`), `CompiledSnapshot` (productId, revision, ttl, and full `features` map).
+- `specificity.ts` — stateless rule-matching and scoring functions. `ruleMatchesContext` checks audience, platform, and semver range inclusion (null min treated as 0.0.0, null max as 99999.0.0). `computeSpecificity` produces a three-digit integer score (authScore×100 + platformScore×10 + versionBoundCount). `selectBestRule` picks the highest-scoring matching rule; ties broken by narrower semver range width. `doRulesOverlap` tests whether two rules' version ranges intersect. `detectAmbiguousOverlap` returns all same-audience+same-platform pairs whose ranges overlap.
+- `service.ts` — `ConfigResolutionService`. Constructor takes `ProductsRepository`, `DefinitionsRepository`, and `RulesRepository`. `buildRawSnapshot(productId)` fetches the current revision, checks the Promise-keyed cache (`productId:revision`), and if absent loads definitions + rules from DB, parses all `entry_json` fields once, and stores the result as a shared Promise (prevents cache stampede; failed loads remove their cache entry). `resolveConfig(productId, ctx)` calls `buildRawSnapshot` then runs `selectBestRule` per feature key, falling back to the manifest default when no rule matches, and returns a `CompiledSnapshot`. `invalidateCache(productId)` removes all cache entries whose key starts with the product prefix. `rebuildSnapshot` invalidates then reloads.
+
+### `src/modules/auth`
+
+Implemented in Task 8. One file:
+
+- `token-verifier.ts` — `TokenVerifier` interface with a single `verify(authHeader: string | undefined): Promise<AuthState>` method. `createTokenVerifier(options)` factory wires `jose` remote JWKS verification with configurable `issuer`, `audience`, and `jwksTimeoutDuration`. Error classes: `TokenInvalidError` (always maps to 401) and `InfraError` (always maps to 503). Four-scenario discrimination: no header → `'anonymous'`; valid bearer → `'authenticated'` with decoded claims; invalid/expired/malformed bearer → `TokenInvalidError`; JWKS/network failure → `InfraError`. The type does not bleed `jose` details into callers.
+
+### `src/modules/public`
+
+Implemented in Task 7; updated in Task 8. Two files:
+
+- `schemas.ts` — Fastify JSON Schema constants: `featureConfigHeaders` (required: `platform` enum `ios|android|web|desktop`, `appname`, `appversion`; optional: `authorization`) and `featureConfigResponse200` (required: `version` integer, `ttl` integer, `features` object with `additionalProperties` entries requiring `isEnabled`).
+- `index.ts` — Fastify async plugin (`publicPlugin`). Options: `resolutionService: ConfigResolutionService`, `productId: number`, and `tokenVerifier: TokenVerifier`. Registers `GET /api/v1/feature-config`. Request handling: calls `tokenVerifier.verify()` on the Authorization header; maps `TokenInvalidError` → 401 and `InfraError` → 503; builds `RequestContext` with the resolved `AuthState`; calls `resolutionService.resolveConfig(productId, ctx)`; returns 200 with `{ version, ttl, features }` and `Cache-Control: no-store`.
+
+### `tests/modules/config-resolution/specificity.test.ts`
+
+32 unit tests covering all five exported functions in `specificity.ts`: audience-only matching, platform-only matching, semver range boundary behavior (inclusive min/max, null bounds), `computeSpecificity` score values for every dimension combination, `selectBestRule` with ties and tiebreaking, `doRulesOverlap` adjacent and overlapping ranges, and `detectAmbiguousOverlap` with clean and conflicting rule sets.
+
+### `tests/modules/config-resolution/service.test.ts`
+
+15 integration tests for `ConfigResolutionService` against an in-memory SQLite database. Covers: concurrent `buildRawSnapshot` calls sharing a single Promise, cache hit on repeated calls, cache-entry cleanup after a failed load, `invalidateCache` forcing a fresh DB read, `rebuildSnapshot` producing updated data, `resolveConfig` returning manifest defaults when no rule matches, and `resolveConfig` selecting the correct rule override for authenticated/platform/version contexts.
+
+### `tests/modules/auth/token-verifier.test.ts`
+
+10 unit tests (TV-1 through TV-10) for `TokenVerifier`. Covers: anonymous path when no Authorization header is present; authenticated path when a valid bearer token is passed; `TokenInvalidError` for expired tokens, malformed tokens, wrong audience, and wrong issuer; `InfraError` when JWKS endpoint is unreachable or returns a network error; and the mock verifier shape used as a test double by public route tests.
+
+### `tests/modules/public/feature-config.test.ts`
+
+14 route integration tests via `fastify.inject()` against an in-memory SQLite instance with two seeded feature definitions. Groups: A (header validation — missing or invalid Platform, missing AppName, missing AppVersion all return 400), B (successful 200 — features map returned, `ttl` matches product value, all seeded keys present, `isEnabled` field present, `Cache-Control: no-store` set), C (auth scenarios — C1 no header → 200 anonymous, C2 valid bearer → 200 authenticated, C3 invalid bearer → 401, C4 expired bearer → 401, C5 JWKS/infra failure → 503; all route tests pass a mock verifier), D (internal error — unknown `productId` wired at app construction returns 500).
 
 ## 3. Current Tooling Scripts
 
@@ -171,24 +212,24 @@ Standalone operator CLI for manifest synchronization:
 - logs upserted/archived counts and the manifest hash
 - exits non-zero on any failure; must be run before service startup
 
+### `scripts/smoke-auth.sh`
+
+Shell smoke script for the four auth scenarios:
+
+- anonymous request (no Authorization header) — expects 200
+- authenticated request (valid bearer token) — expects 200
+- invalid token — expects 401
+- infra failure path — documents the expected 503 surface
+
 ## 4. Planned Runtime Zones
 
-These sections describe the implementation areas expected to appear in Tasks 6–12.
+These sections describe the implementation areas expected to appear in Tasks 8–12.
 
 ### `src/db`
 
 - Knex initialization
 - migration entry points
 - DB-specific helpers
-
-### `src/modules/public`
-
-Expected responsibilities:
-
-- required header parsing
-- request context building
-- public response contract
-- status code semantics
 
 ### `src/modules/admin`
 
@@ -198,22 +239,6 @@ Expected responsibilities:
 - revision-safe mutations
 - audit metadata
 - preview and revision history screens
-
-### `src/modules/auth`
-
-Expected responsibilities:
-
-- bearer token verification
-- JWKS interaction and caching
-- admin identity integration
-
-### `src/modules/config-resolution`
-
-Expected responsibilities:
-
-- rule specificity ordering
-- full config assembly
-- compiled snapshot cache
 
 ### `src/modules/definitions`
 

@@ -1,14 +1,24 @@
 import Fastify, { FastifyInstance } from 'fastify'
 import healthPlugin from './modules/health/index'
+import publicPlugin from './modules/public/index'
 import { createLogger } from './shared/logger'
 import type { Env } from './config/env'
 import type { ManifestRegistry } from './modules/manifest/registry'
+import type { ConfigResolutionService } from './modules/config-resolution/service'
+import type { TokenVerifier } from './modules/auth/token-verifier'
+
+export interface PublicOptions {
+  resolutionService: ConfigResolutionService
+  productId: number
+  tokenVerifier: TokenVerifier
+}
 
 export interface AppOptions {
   logger?: boolean | object
   env?: Pick<Env, 'LOG_LEVEL' | 'TRUST_PROXY'>
   readyChecks?: Array<() => Promise<void>>
   manifestRegistry?: ManifestRegistry
+  publicOptions?: PublicOptions
 }
 
 export async function createApp(options: AppOptions = {}): Promise<FastifyInstance> {
@@ -33,6 +43,10 @@ export async function createApp(options: AppOptions = {}): Promise<FastifyInstan
   await app.register(healthPlugin, {
     readyChecks: allReadyChecks,
   })
+
+  if (options.publicOptions) {
+    await app.register(publicPlugin, options.publicOptions)
+  }
 
   return app
 }

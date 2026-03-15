@@ -452,11 +452,11 @@ Source of truth:
 
 ### Критерии приёмки
 
-- [ ] Сервер возвращает полный resolved snapshot, а не только overrides
-- [ ] Most-specific rule wins
-- [ ] Manifest default используется при отсутствии override
-- [ ] Ambiguous overlap детектируется и запрещается
-- [ ] Compiled cache завязан на revision и пригоден для reuse
+- [x] Сервер возвращает полный resolved snapshot, а не только overrides
+- [x] Most-specific rule wins
+- [x] Manifest default используется при отсутствии override
+- [x] Ambiguous overlap детектируется и запрещается
+- [x] Compiled cache завязан на revision и пригоден для reuse
 
 ---
 
@@ -519,11 +519,11 @@ Source of truth:
 
 ### Критерии приёмки
 
-- [ ] `GET /api/v1/feature-config` отдаёт контрактный ответ
-- [ ] Заголовки валидируются
-- [ ] Ответ соответствует `api.yaml`
-- [ ] При отсутствии auth строится anonymous config
-- [ ] Public route не содержит лишней бизнес-логики поверх orchestration
+- [x] `GET /api/v1/feature-config` отдаёт контрактный ответ
+- [x] Заголовки валидируются
+- [x] Ответ соответствует `api.yaml`
+- [x] При отсутствии auth строится anonymous config
+- [x] Public route не содержит лишней бизнес-логики поверх orchestration
 
 ---
 
@@ -586,10 +586,10 @@ Source of truth:
 
 ### Критерии приёмки
 
-- [ ] Нет silent downgrade при битом токене
-- [ ] Invalid token всегда даёт `401`
-- [ ] Infra/JWKS problem даёт `5xx`
-- [ ] Auth state корректно доходит до resolution service
+- [x] Нет silent downgrade при битом токене
+- [x] Invalid token всегда даёт `401`
+- [x] Infra/JWKS problem даёт `5xx`
+- [x] Auth state корректно доходит до resolution service
 
 ---
 
