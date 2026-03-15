@@ -2,7 +2,7 @@
 
 Deeper index for `elph_nova_toggle_service`.
 
-This repository is past the bootstrap stage. Tasks 1–8 are complete. The index now covers real source and test files as well as the agreed target zones that future implementation will fill.
+This repository is past the bootstrap stage. Tasks 1–9 are complete. The index now covers real source and test files as well as the agreed target zones that future implementation will fill.
 
 ## 1. Current Operational Docs
 
@@ -86,11 +86,11 @@ Delivery contour and service discovery contract:
 
 ### `src/app.ts`
 
-Fastify app factory exported as `createApp(options?)`. `AppOptions` accepts optional `manifestRegistry` (adds its `readyCheck()` to the health list), `readyChecks` (extra injectable checks), and `publicOptions` (`PublicOptions` with `resolutionService`, numeric `productId`, and `tokenVerifier: TokenVerifier`). Conditionally registers the public plugin when `publicOptions` is present. Does not call `listen()`.
+Fastify app factory exported as `createApp(options?)`. `AppOptions` accepts optional `manifestRegistry` (adds its `readyCheck()` to the health list), `readyChecks` (extra injectable checks), `publicOptions` (`PublicOptions` with `resolutionService`, numeric `productId`, and `tokenVerifier: TokenVerifier`), and `adminOptions` (`AdminOptions` with `service: AdminRulesService`, `verifier: TokenVerifier`, and `productId: number`). Conditionally registers the public plugin when `publicOptions` is present and the admin plugin when `adminOptions` is present. Does not call `listen()`.
 
 ### `src/server.ts`
 
-Process entry point. On startup: loads the manifest, builds `ManifestRegistry`, constructs `ManifestSyncService` and registers its `driftReadyCheck()`; resolves numeric `productId` via `upsertByName(env.DEFAULT_PRODUCT_ID)` (idempotent, handles first-run before sync-manifest); constructs `ConfigResolutionService` with `DefaultProductsRepository`, `DefaultDefinitionsRepository`, and `DefaultRulesRepository`; constructs `TokenVerifier` from env (`jwksUri`, `issuer`, `audience`, `jwksTimeoutMs`); passes `publicOptions` (including `tokenVerifier`) to `createApp`, then calls `listen()`. Exits with code 1 on any startup failure.
+Process entry point. On startup: loads the manifest, builds `ManifestRegistry`, constructs `ManifestSyncService` and registers its `driftReadyCheck()`; resolves numeric `productId` via `upsertByName(env.DEFAULT_PRODUCT_ID)` (idempotent, handles first-run before sync-manifest); constructs `ConfigResolutionService` with `DefaultProductsRepository`, `DefaultDefinitionsRepository`, and `DefaultRulesRepository`; constructs `DefaultRevisionsRepository` and `AdminRulesService`; constructs `TokenVerifier` from env (`jwksUri`, `issuer`, `audience`, `jwksTimeoutMs`); passes both `publicOptions` and `adminOptions` (sharing the same `tokenVerifier`) to `createApp`, then calls `listen()`. Exits with code 1 on any startup failure.
 
 ### `src/modules/manifest`
 
@@ -154,9 +154,9 @@ Implemented in Task 6. Three files:
 
 ### `src/modules/auth`
 
-Implemented in Task 8. One file:
+Implemented in Task 8; updated in Task 9. One file:
 
-- `token-verifier.ts` — `TokenVerifier` interface with a single `verify(authHeader: string | undefined): Promise<AuthState>` method. `createTokenVerifier(options)` factory wires `jose` remote JWKS verification with configurable `issuer`, `audience`, and `jwksTimeoutDuration`. Error classes: `TokenInvalidError` (always maps to 401) and `InfraError` (always maps to 503). Four-scenario discrimination: no header → `'anonymous'`; valid bearer → `'authenticated'` with decoded claims; invalid/expired/malformed bearer → `TokenInvalidError`; JWKS/network failure → `InfraError`. The type does not bleed `jose` details into callers.
+- `token-verifier.ts` — `TokenVerifier` interface with a single `verify(authHeader: string | undefined): Promise<AuthResult>` method. `AuthResult` carries `state`, optional `sub`, and optional `roles?: string[]` (extracted from the JWT `roles` claim on authenticated results; used by the admin RBAC hook). `createTokenVerifier(options)` factory wires `jose` remote JWKS verification with configurable `issuer`, `audience`, and `jwksTimeoutDuration`. Error classes: `TokenInvalidError` (always maps to 401) and `InfraError` (always maps to 503). Four-scenario discrimination: no header → `'anonymous'`; valid bearer → `'authenticated'` with decoded claims; invalid/expired/malformed bearer → `TokenInvalidError`; JWKS/network failure → `InfraError`. The type does not bleed `jose` details into callers.
 
 ### `src/modules/public`
 
@@ -164,6 +164,14 @@ Implemented in Task 7; updated in Task 8. Two files:
 
 - `schemas.ts` — Fastify JSON Schema constants: `featureConfigHeaders` (required: `platform` enum `ios|android|web|desktop`, `appname`, `appversion`; optional: `authorization`) and `featureConfigResponse200` (required: `version` integer, `ttl` integer, `features` object with `additionalProperties` entries requiring `isEnabled`).
 - `index.ts` — Fastify async plugin (`publicPlugin`). Options: `resolutionService: ConfigResolutionService`, `productId: number`, and `tokenVerifier: TokenVerifier`. Registers `GET /api/v1/feature-config`. Request handling: calls `tokenVerifier.verify()` on the Authorization header; maps `TokenInvalidError` → 401 and `InfraError` → 503; builds `RequestContext` with the resolved `AuthState`; calls `resolutionService.resolveConfig(productId, ctx)`; returns 200 with `{ version, ttl, features }` and `Cache-Control: no-store`.
+
+### `src/modules/admin`
+
+Implemented in Task 9. Three files:
+
+- `auth.ts` — `makeAdminAuthHook(verifier, requiredRole)` returns a Fastify `preHandler` function. Calls `verifier.verify()` on the Authorization header; maps `TokenInvalidError` → 401 and `InfraError` → 503; anonymous result → 401. Role check: `ROLE_VIEWER` is satisfied by either `feature-toggle-viewer` or `feature-toggle-editor`; `ROLE_EDITOR` requires `feature-toggle-editor` only. Attaches `request.adminRole` (the highest granted role) and `request.adminSub` (JWT `sub`) on success. Augments `FastifyRequest` with these two fields via module declaration merging.
+- `service.ts` — `AdminRulesService` orchestrates all admin write flows. Constructor takes `db`, `ManifestRegistry`, `RulesRepository`, `ProductsRepository`, `RevisionsRepository`, and `ConfigResolutionService`. `createRule` validates registry key, non-empty reason, `entry_json` fields against manifest payload schema, and ambiguous overlap; then wraps `rulesRepo.create` + `productsRepo.updateRevision` + `revisionsRepo.insert` in a single transaction and calls `invalidateCache`. `updateRule` and `disableRule` follow the same pattern with their respective repository calls. `listRules` delegates to `listAllActive`. `getRule` throws `NotFoundError` when absent. All three mutation methods surface stale `expectedRevision` as `ConflictError`. Domain error classes exported: `ValidationError`, `ConflictError`, `NotFoundError`.
+- `routes.ts` — Fastify async plugin (`adminPlugin`) with `AdminPluginOptions` (`service`, `verifier`, `productId`). Registers five routes under `/admin/api/rules`: `GET /` and `GET /:id` require `ROLE_VIEWER`; `POST /`, `PATCH /:id`, and `DELETE /:id` require `ROLE_EDITOR`. Zod schemas validate request bodies on all mutations (`createRuleBodySchema`, `updateRuleBodySchema`, `disableRuleBodySchema`). `handleServiceError` maps `ValidationError` → 400, `NotFoundError` → 404, `ConflictError` → 409; unrecognised errors are re-thrown to Fastify.
 
 ### `tests/modules/config-resolution/specificity.test.ts`
 
@@ -180,6 +188,14 @@ Implemented in Task 7; updated in Task 8. Two files:
 ### `tests/modules/public/feature-config.test.ts`
 
 14 route integration tests via `fastify.inject()` against an in-memory SQLite instance with two seeded feature definitions. Groups: A (header validation — missing or invalid Platform, missing AppName, missing AppVersion all return 400), B (successful 200 — features map returned, `ttl` matches product value, all seeded keys present, `isEnabled` field present, `Cache-Control: no-store` set), C (auth scenarios — C1 no header → 200 anonymous, C2 valid bearer → 200 authenticated, C3 invalid bearer → 401, C4 expired bearer → 401, C5 JWKS/infra failure → 503; all route tests pass a mock verifier), D (internal error — unknown `productId` wired at app construction returns 500).
+
+### `tests/modules/admin/service.test.ts`
+
+10 unit tests (U1–U10) for `AdminRulesService` using vitest mocks for all repositories and a real in-memory SQLite instance wired through `withTransaction`. U1: unknown feature key → `ValidationError`. U2: empty reason → `ValidationError`. U3: `updateRevision` rejection → `ConflictError`. U4: successful create returns the rule and calls `invalidateCache`. U5: inactive rule → `NotFoundError` on update. U6: rule belonging to a different product → `NotFoundError` on update. U7: successful update returns updated row and calls `invalidateCache`. U8: already-inactive rule → `NotFoundError` on disable. U9: successful disable calls `rulesRepo.disable` and `invalidateCache`. U10: unknown field in `entry_json` when manifest schema defines fields → `ValidationError`.
+
+### `tests/modules/admin/routes.test.ts`
+
+26 route integration tests via `fastify.inject()` against an in-memory SQLite instance with two seeded feature definitions (`chat`, `video_call`). Test groups: H (H1–H8, auth boundary enforcement across all HTTP verbs and role levels), V (V1–V10, service-level validation surfaced through HTTP status codes: 400 for bad input, 404 for missing resources, 409 for stale revision and ambiguous overlap), ZB (ZB1–ZB5, zod request-body schema enforcement before the service is reached), CI1 (resolution cache is invalidated after a successful write and the list endpoint immediately reflects the new rule), B1 (full create → get → update → disable CRUD round-trip; rule absent from list after disable), S1 (`changedBy` in the revision record is the JWT `sub` field, not the role label string).
 
 ## 3. Current Tooling Scripts
 
@@ -223,22 +239,13 @@ Shell smoke script for the four auth scenarios:
 
 ## 4. Planned Runtime Zones
 
-These sections describe the implementation areas expected to appear in Tasks 8–12.
+These sections describe the implementation areas expected to appear in Tasks 10–12.
 
 ### `src/db`
 
 - Knex initialization
 - migration entry points
 - DB-specific helpers
-
-### `src/modules/admin`
-
-Expected responsibilities:
-
-- admin routes and forms
-- revision-safe mutations
-- audit metadata
-- preview and revision history screens
 
 ### `src/modules/definitions`
 

@@ -655,11 +655,11 @@ Source of truth:
 
 ### Критерии приёмки
 
-- [ ] Viewer не может мутировать данные
-- [ ] Editor может создавать и обновлять правила
-- [ ] Пишутся только manifest-backed keys
-- [ ] `reason` обязателен
-- [ ] Write path не ломает separation public/admin
+- [x] Viewer не может мутировать данные
+- [x] Editor может создавать и обновлять правила
+- [x] Пишутся только manifest-backed keys
+- [x] `reason` обязателен
+- [x] Write path не ломает separation public/admin
 
 ---
 

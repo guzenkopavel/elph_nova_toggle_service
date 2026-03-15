@@ -9,7 +9,9 @@ import { ManifestSyncService } from './modules/manifest/sync'
 import { DefaultDefinitionsRepository } from './modules/definitions/repository'
 import { DefaultProductsRepository } from './modules/products/repository'
 import { DefaultRulesRepository } from './modules/rules/repository'
+import { DefaultRevisionsRepository } from './modules/revisions/repository'
 import { ConfigResolutionService } from './modules/config-resolution/service'
+import { AdminRulesService } from './modules/admin/service'
 import { createTokenVerifier } from './modules/auth/token-verifier'
 
 async function start() {
@@ -36,7 +38,17 @@ async function start() {
     logger.info({ productName: env.DEFAULT_PRODUCT_ID, productId }, 'Resolved product')
 
     const rulesRepo = new DefaultRulesRepository(defaultDb)
+    const revisionsRepo = new DefaultRevisionsRepository(defaultDb)
     const resolutionService = new ConfigResolutionService(productsRepo, definitionsRepo, rulesRepo)
+
+    const adminService = new AdminRulesService(
+      defaultDb,
+      manifestRegistry,
+      rulesRepo,
+      productsRepo,
+      revisionsRepo,
+      resolutionService,
+    )
 
     const tokenVerifier = createTokenVerifier({
       jwksUri: env.SSO_JWKS_URI,
@@ -52,6 +64,7 @@ async function start() {
       // Reuse the already-constructed logger — avoids duplicating redact config
       logger: logger as object,
       publicOptions: { resolutionService, productId, tokenVerifier },
+      adminOptions: { service: adminService, verifier: tokenVerifier, productId },
     })
 
     let closing = false

@@ -2,7 +2,7 @@
 
 Repository map for `elph_nova_toggle_service`.
 
-Current state: Tasks 1–8 are complete. The files below reflect what exists now, plus an explicitly marked target structure for the remaining service implementation.
+Current state: Tasks 1–9 are complete. The files below reflect what exists now, plus an explicitly marked target structure for the remaining service implementation.
 
 ## Scope And Exclusions
 
@@ -125,9 +125,9 @@ Excluded from indexing by default:
 ## `src`
 
 - `src/app.ts`
-  - Fastify app factory (`createApp`); `AppOptions` includes optional `manifestRegistry`, `readyChecks`, and `publicOptions` (`PublicOptions` with `resolutionService`, `productId`, and `tokenVerifier`); conditionally registers the public plugin when `publicOptions` is provided
+  - Fastify app factory (`createApp`); `AppOptions` includes optional `manifestRegistry`, `readyChecks`, `publicOptions` (`PublicOptions` with `resolutionService`, `productId`, and `tokenVerifier`), and `adminOptions` (`AdminOptions` with `service`, `verifier`, and `productId`); conditionally registers the public and admin plugins when their respective options are provided
 - `src/server.ts`
-  - process bootstrap: loads manifest, builds `ManifestRegistry`, registers drift check; resolves numeric `productId` via `upsertByName(env.DEFAULT_PRODUCT_ID)`; constructs `ConfigResolutionService` with three repositories; constructs `TokenVerifier` from env (`jwksUri`, `issuer`, `audience`, `jwksTimeoutMs`); passes `publicOptions` to `createApp`, then calls `listen()`
+  - process bootstrap: loads manifest, builds `ManifestRegistry`, registers drift check; resolves numeric `productId` via `upsertByName(env.DEFAULT_PRODUCT_ID)`; constructs `ConfigResolutionService` with three repositories; constructs `DefaultRevisionsRepository` and `AdminRulesService`; constructs `TokenVerifier` from env (`jwksUri`, `issuer`, `audience`, `jwksTimeoutMs`); passes both `publicOptions` and `adminOptions` to `createApp`, then calls `listen()`
 - `src/config/env.ts`
   - full stage-1 zod schema for all env variables; includes `SSO_JWKS_TIMEOUT_MS` (default 3000 ms) and a `superRefine` cross-field check that requires `SSO_ISSUER` and `SSO_AUDIENCE` when `SSO_JWKS_URI` is set in staging/production; throws on invalid values
 - `src/shared/logger.ts`
@@ -196,7 +196,7 @@ Excluded from indexing by default:
 ## `src/modules/auth`
 
 - `src/modules/auth/token-verifier.ts`
-  - `TokenVerifier` interface with a single async `verify(authHeader)` method; `createTokenVerifier` factory wiring `jose` JWKS verification with configurable `issuer`, `audience`, and `jwksTimeoutDuration`; `TokenInvalidError` (maps to 401) and `InfraError` (maps to 503) error classes; four-scenario discrimination: no header → anonymous, valid bearer → authenticated with decoded claims, invalid/expired/malformed bearer → `TokenInvalidError`, JWKS/network failure → `InfraError`
+  - `TokenVerifier` interface with a single async `verify(authHeader)` method returning `AuthResult`; `AuthResult` includes `state`, optional `sub`, and optional `roles?: string[]` (extracted from JWT payload on authenticated results); `createTokenVerifier` factory wiring `jose` JWKS verification with configurable `issuer`, `audience`, and `jwksTimeoutDuration`; `TokenInvalidError` (maps to 401) and `InfraError` (maps to 503) error classes; four-scenario discrimination: no header → anonymous, valid bearer → authenticated with decoded claims, invalid/expired/malformed bearer → `TokenInvalidError`, JWKS/network failure → `InfraError`
 
 ## `src/modules/public`
 
@@ -204,6 +204,15 @@ Excluded from indexing by default:
   - Fastify JSON Schema objects for the public route: `featureConfigHeaders` (Platform enum, AppName, AppVersion required; Authorization optional) and `featureConfigResponse200` (version integer, ttl integer, features map with required `isEnabled` per entry)
 - `src/modules/public/index.ts`
   - Fastify plugin (`publicPlugin`) registering `GET /api/v1/feature-config`; accepts `resolutionService`, `productId`, and `tokenVerifier` as plugin options; calls `tokenVerifier.verify()` on the Authorization header and maps `TokenInvalidError` to 401 and `InfraError` to 503; builds `RequestContext` with the resolved `AuthState`; calls `resolveConfig`; sets `Cache-Control: no-store` on 200 responses
+
+## `src/modules/admin`
+
+- `src/modules/admin/auth.ts`
+  - `makeAdminAuthHook(verifier, requiredRole)`: returns a Fastify `preHandler` that enforces RBAC; anonymous → 401, `TokenInvalidError` → 401, `InfraError` → 503, wrong role → 403; attaches `adminRole` and `adminSub` to the request on success; exports `ROLE_VIEWER` (`feature-toggle-viewer`), `ROLE_EDITOR` (`feature-toggle-editor`), and `AdminRole` type; viewer permission is satisfied by either role, editor permission requires `ROLE_EDITOR` only
+- `src/modules/admin/service.ts`
+  - `AdminRulesService`: five methods — `createRule`, `updateRule`, `disableRule`, `listRules`, `getRule`; each write validates registry key presence, non-empty reason, `entry_json` fields against manifest payload schema, and ambiguous overlap via `detectAmbiguousOverlap`; all mutations run inside `withTransaction` (mutate rule → `updateRevision` → `insertRevision`) and call `invalidateCache` on success; `ConflictError` surfaces stale `expectedRevision` as 409; domain error classes: `ValidationError`, `ConflictError`, `NotFoundError`
+- `src/modules/admin/routes.ts`
+  - Fastify plugin (`adminPlugin`) registering five routes under `/admin/api/rules`: `GET /` (list, ROLE_VIEWER), `GET /:id` (single, ROLE_VIEWER), `POST /` (create, ROLE_EDITOR → 201), `PATCH /:id` (update, ROLE_EDITOR → 200), `DELETE /:id` (disable, ROLE_EDITOR → 200); zod body validation on all mutations; `handleServiceError` maps `ValidationError` → 400, `NotFoundError` → 404, `ConflictError` → 409; `AdminPluginOptions` accepts `service`, `verifier`, and `productId`
 
 ## `tests/modules/config-resolution`
 
@@ -235,12 +244,17 @@ Excluded from indexing by default:
 - `tests/modules/public/feature-config.test.ts`
   - 14 route integration tests via `fastify.inject()`: 4 header-validation cases (missing/invalid Platform, missing AppName, missing AppVersion → 400), 4 successful 200 cases (features map present, Cache-Control header, all seeded keys returned, `isEnabled` field present), 5 auth cases (C1 updated anonymous → 200, C2 valid bearer → 200 authenticated, C3 invalid bearer → 401, C4 expired bearer → 401, C5 infra failure → 503), 1 internal error case (unknown productId → 500)
 
+## `tests/modules/admin`
+
+- `tests/modules/admin/service.test.ts`
+  - 10 unit tests (U1–U10) for `AdminRulesService` using mocked repositories and a real in-memory SQLite instance; covers unknown feature key → `ValidationError`, empty reason → `ValidationError`, revision conflict → `ConflictError`, successful create with cache invalidation, inactive rule → `NotFoundError`, cross-product rule access → `NotFoundError`, successful update with cache invalidation, already-inactive disable → `NotFoundError`, successful disable with cache invalidation, and unknown `entry_json` field against manifest schema → `ValidationError`
+- `tests/modules/admin/routes.test.ts`
+  - 26 route integration tests via `fastify.inject()` against an in-memory SQLite instance; groups: H (H1–H8, auth boundary: anonymous → 401, invalid token → 401, infra error → 503, viewer on GET → 200, viewer on POST/PATCH/DELETE → 403, editor on POST → 201), V (V1–V10, validation: unknown key → 400, empty reason → 400, stale revision → 409, not found → 404, ambiguous overlap → 409), ZB (ZB1–ZB5, zod schema: invalid audience/platform enum → 400, non-integer expectedRevision → 400, missing required fields → 400), CI1 (cache invalidated after write; GET list reflects new rule), B1 (full CRUD round-trip: create → get → update → disable, rule absent from list after disable), S1 (`changedBy` in revision record is JWT `sub`, not the role label)
+
 ## Target Service Structure
 
 The paths below are planned but not yet created. They represent the intended implementation layout for stage-1.
 
-- `src/modules/admin/*`
-  - admin routes, forms, services, and auth integration
 - `src/views/*`
   - Nunjucks templates for the admin UI
 - `src/shared/*`

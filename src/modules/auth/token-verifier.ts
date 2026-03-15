@@ -3,6 +3,7 @@ import { createRemoteJWKSet, jwtVerify, errors as joseErrors } from 'jose'
 export interface AuthResult {
   state: 'anonymous' | 'authenticated'
   sub?: string
+  roles?: string[]
 }
 
 // Distinct error classes so the route can map precisely:
@@ -72,7 +73,8 @@ export function createTokenVerifier(config: TokenVerifierConfig): TokenVerifier 
           ...(config.issuer ? { issuer: config.issuer } : {}),
           ...(config.audience ? { audience: config.audience } : {}),
         })
-        return { state: 'authenticated', sub: payload.sub }
+        const roles = Array.isArray(payload['roles']) ? payload['roles'] as string[] : []
+        return { state: 'authenticated', sub: payload.sub, roles }
       } catch (err) {
         // Discriminate token errors (→ 401) from infra errors (→ 5xx)
         if (isTokenInvalidError(err)) {

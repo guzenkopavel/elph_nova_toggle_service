@@ -9,5 +9,13 @@ export async function withTransaction<T>(
   db: Knex,
   callback: (trx: Knex.Transaction) => Promise<T>
 ): Promise<T> {
-  return db.transaction(callback)
+  const trx = await db.transaction()
+  try {
+    const result = await callback(trx)
+    await trx.commit()
+    return result
+  } catch (err) {
+    await trx.rollback()
+    throw err
+  }
 }
