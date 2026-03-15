@@ -2,7 +2,7 @@
 
 Deeper index for `elph_nova_toggle_service`.
 
-This repository is still at the bootstrap stage, so the current index covers both real files and the agreed target zones that future implementation will fill.
+This repository is past the bootstrap stage. Task 2 delivered the initial Node.js service skeleton. The index now covers real source and test files as well as the agreed target zones that future implementation will fill.
 
 ## 1. Current Operational Docs
 
@@ -71,7 +71,55 @@ Ready-to-use coordinator prompts for:
 - specification/design workflow
 - verification and QA workflow
 
-## 2. Current Tooling Scripts
+### `docs/DELIVERY_CONTOUR.md`
+
+Delivery contour and service discovery contract:
+
+- standalone public URL and HTTPS requirements
+- client baseURL discovery (pre-login, post-login, contour transition)
+- admin access model for test host (SSH tunnel as default, separate admin-host as upgrade path)
+- SSO claims and server-side role mapping (viewer/editor)
+- manifest artifact delivery method (volume mount vs baked image)
+- deployment baseline table and pre-release smoke checklist for Tasks 2–12
+
+## 2. Current Source and Test Files
+
+### `src/app.ts`
+
+Fastify app factory exported as `createApp(options?)`. Accepts optional logger config. Registers plugins and modules (placeholder in Task 2). Does not call `listen()`.
+
+### `src/server.ts`
+
+Process entry point. Calls `createApp()`, reads `env.PORT`, calls `listen()`. Exits with code 1 on startup failure.
+
+### `src/config/env.ts`
+
+Full stage-1 zod schema covering all service env variables (not just `NODE_ENV`/`PORT`). Throws at module load time on invalid values. Exports typed `Env` type and singleton `env` instance.
+
+### `src/shared/logger.ts`
+
+Pino logger factory. Configures redaction for sensitive field paths so they do not appear in log output.
+
+### `src/modules/health/index.ts`
+
+Fastify plugin registering two health routes:
+
+- `GET /health/live` — always returns 200; confirms the process is running.
+- `GET /health/ready` — accepts an injectable `ReadyCheck` array; returns 200 when all checks pass, 503 otherwise.
+
+### `tests/app.test.ts`
+
+Vitest suite covering `createApp`: instantiation without error, inject returning 404 on bare app, and clean `close()`.
+
+### `tests/config/env.test.ts`
+
+8 unit tests for `parseEnv`: missing required variables, invalid types, accepted defaults, and full valid input.
+
+### `tests/health.test.ts`
+
+5 integration tests for the health plugin: liveness always passes, readiness with no checks passes, readiness with a failing check returns 503, and injectable check arrays behave correctly.
+
+## 3. Current Tooling Scripts
 
 ### `scripts/find-code.sh`
 
@@ -93,15 +141,9 @@ Purpose:
 - compare actual files with `docs/REPO_MAP.md`
 - support `repo-indexer`
 
-## 3. Planned Runtime Zones
+## 4. Planned Runtime Zones
 
-These sections describe the implementation areas expected to appear next.
-
-### `src/config`
-
-- typed env config
-- deployment-sensitive feature flags
-- parse-once validation
+These sections describe the implementation areas expected to appear in Tasks 3–12.
 
 ### `src/db`
 
@@ -173,7 +215,7 @@ Expected responsibilities:
 - truly shared helpers only
 - no dumping ground for misplaced business logic
 
-## 4. Primary Backend Risks To Watch
+## 5. Primary Backend Risks To Watch
 
 - auth downgrade bugs
 - manifest drift

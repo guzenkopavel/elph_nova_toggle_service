@@ -2,7 +2,7 @@
 
 Repository map for `elph_nova_toggle_service`.
 
-Current state: this repository is being bootstrapped. The files below reflect what exists now, plus an explicitly marked target structure for the upcoming service implementation.
+Current state: Tasks 1–4 are complete. The files below reflect what exists now, plus an explicitly marked target structure for the remaining service implementation.
 
 ## Scope And Exclusions
 
@@ -95,6 +95,8 @@ Excluded from indexing by default:
   - practical guide for multi-agent work in this repository
 - `docs/SERVER_AGENT_PROMPTS.md`
   - ready coordinator prompts for implementation, bugs, and design work
+- `docs/DELIVERY_CONTOUR.md`
+  - delivery contour and service discovery contract: standalone URL, client baseURL discovery, admin access model, SSO role mapping, manifest artifact delivery, and smoke baseline for Tasks 2–12
 - `docs/DOCUMENTATION_INDEX.md`
   - quick index of repository documentation
 - `docs/README_DOCUMENTATION.md`
@@ -107,20 +109,83 @@ Excluded from indexing by default:
 - `scripts/find-unmapped-files.sh`
   - helper for repo-indexer to find files not yet mentioned in `docs/REPO_MAP.md`
 
-## Target Service Structure
+## Root Config Files
 
-These paths do not necessarily exist yet. They are the intended implementation layout for stage-1.
+- `package.json`
+  - npm manifest, dependency declarations, and npm scripts
+- `.env.example`
+  - documented template of all supported environment variables
+- `knexfile.ts`
+  - Knex CLI entry point; exports named `development`, `test`, and `production` connection configs for migrations
+
+## `src`
 
 - `src/app.ts`
-  - Fastify app construction and high-level wiring
+  - Fastify app factory (`createApp`); wires plugins and modules; does not call `listen()`
 - `src/server.ts`
-  - process bootstrap and HTTP start
+  - process bootstrap: calls `createApp` then `listen()`
 - `src/config/env.ts`
-  - typed env parsing and validation
+  - full stage-1 zod schema for all env variables; throws on invalid values, uses defaults for optional keys
+- `src/shared/logger.ts`
+  - pino logger factory with redaction config for sensitive fields
+- `src/modules/health/index.ts`
+  - Fastify health plugin; registers GET /health/live (always 200) and GET /health/ready (200/503 with injectable ReadyCheck array)
+
+## `src/db`
+
 - `src/db/knex.ts`
-  - Knex setup
-- `src/db/migrations/*`
-  - schema migrations
+  - Knex instance factory and process-scoped singleton; selects SQLite for test/dev, PostgreSQL for production
+- `src/db/transaction.ts`
+  - `withTransaction` helper; wraps a callback in a Knex transaction with automatic commit/rollback
+
+## `src/db/migrations`
+
+- `src/db/migrations/001_create_products.ts`
+  - creates the `products` table (id, slug, name, timestamps)
+- `src/db/migrations/002_create_feature_definitions.ts`
+  - creates the `feature_definitions` table (key, product_id, default value, payload schema, remote_capable flag)
+- `src/db/migrations/003_create_feature_rules.ts`
+  - creates the `feature_rules` table (definition_id, conditions, override value, priority, timestamps)
+- `src/db/migrations/004_create_config_revisions.ts`
+  - creates the `config_revisions` table (product_id, monotonic revision counter, snapshot, timestamps)
+
+## `src/modules/products`
+
+- `src/modules/products/repository.ts`
+  - `ProductsRepository` interface and `DefaultProductsRepository`; CRUD over the `products` table
+
+## `src/modules/definitions`
+
+- `src/modules/definitions/repository.ts`
+  - `DefinitionsRepository` interface and `DefaultDefinitionsRepository`; reads and writes `feature_definitions` rows
+
+## `src/modules/rules`
+
+- `src/modules/rules/repository.ts`
+  - `RulesRepository` interface and `DefaultRulesRepository`; reads and writes `feature_rules` rows
+
+## `src/modules/revisions`
+
+- `src/modules/revisions/repository.ts`
+  - `RevisionsRepository` interface and `DefaultRevisionsRepository`; advances the monotonic revision and stores config snapshots
+
+## `tests`
+
+- `tests/app.test.ts`
+  - vitest suite: app instantiation, inject 404 on bare app, clean close
+- `tests/config/env.test.ts`
+  - 8 unit tests covering parseEnv validation branches (missing required vars, invalid types, defaults)
+- `tests/health.test.ts`
+  - 5 integration tests for /health/live and /health/ready routes (liveness, readiness pass/fail, injectable checks)
+- `tests/db/migrations.test.ts`
+  - migration correctness and idempotency tests: up/down round-trip for all four migrations against an in-memory SQLite instance
+- `tests/db/repositories.test.ts`
+  - integration tests for all four repository implementations and the `withTransaction` helper against an in-memory SQLite instance
+
+## Target Service Structure
+
+The paths below are planned but not yet created. They represent the intended implementation layout for stage-1.
+
 - `src/modules/public/*`
   - public API routing, schemas, request context, serialization
 - `src/modules/admin/*`
@@ -131,12 +196,6 @@ These paths do not necessarily exist yet. They are the intended implementation l
   - manifest loading, registry, and sync logic
 - `src/modules/config-resolution/*`
   - rule specificity, compilation, and response assembly
-- `src/modules/definitions/*`
-  - definition persistence
-- `src/modules/rules/*`
-  - rule persistence
-- `src/modules/revisions/*`
-  - revision persistence and audit history
 - `src/views/*`
   - Nunjucks templates for the admin UI
 - `src/shared/*`

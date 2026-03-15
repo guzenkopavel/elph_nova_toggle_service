@@ -1,0 +1,45 @@
+import { parseEnv } from './config/env'
+import { createLogger } from './shared/logger'
+import { createApp } from './app'
+
+async function start() {
+  try {
+    const env = parseEnv()
+    const logger = createLogger({ LOG_LEVEL: env.LOG_LEVEL })
+
+    const app = await createApp({
+      env,
+      readyChecks: [],
+      // Reuse the already-constructed logger — avoids duplicating redact config
+      logger: logger as object,
+    })
+
+    let closing = false
+    const signals: NodeJS.Signals[] = ['SIGTERM', 'SIGINT']
+    signals.forEach((signal) => {
+      process.once(signal, async () => {
+        if (closing) return
+        closing = true
+        logger.info({ signal }, 'Received shutdown signal')
+        try {
+          await app.close()
+          logger.info('Server closed gracefully')
+          process.exit(0)
+        } catch (err) {
+          logger.error(err, 'Error during graceful shutdown')
+          process.exit(1)
+        }
+      })
+    })
+
+    await app.listen({ port: env.PORT, host: '0.0.0.0' })
+  } catch (err) {
+    console.error('Fatal startup error:', err)
+    process.exit(1)
+  }
+}
+
+start().catch((err) => {
+  console.error(err)
+  process.exit(1)
+})

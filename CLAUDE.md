@@ -29,7 +29,7 @@ Unless the user explicitly changes direction, prefer the agreed stage-1 stack:
 - `semver` for app version matching
 - `vitest` for unit/integration tests
 - `fastify.inject()` for route-level integration checks
-- `Playwright` for admin UI browser smoke once the admin UI exists
+- `Playwright` for repeatable admin UI browser automation once the admin UI exists
 
 ## What Matters More Than Generic Defaults
 
@@ -96,6 +96,8 @@ Testing is part of implementation, not a later cleanup phase.
 - If the admin UI changes, the affected flow must be exercised through the UI:
   - prefer `Playwright` once it exists in the repository;
   - before that, use HTTP-level form submit and HTML assertions as a temporary fallback.
+- The target state is not manual verification. API, admin UI, preview/public parity, and rollout-critical flows should end up covered by repeatable automated tests that the agent can run itself.
+- A temporary manual or HTTP-level fallback is acceptable only while the first proper automated suite is being introduced.
 - When preview exists, verify preview/public parity for the same input parameters.
 - Final task reporting must state what was tested, what was smoke-checked live, and what remains unverified.
 
@@ -168,7 +170,7 @@ Prefer the narrowest correct verification:
 - targeted unit tests for the touched module
 - migration checks when DB schema changes
 - route-level smoke checks when HTTP contract changes
-- admin UI smoke when admin pages or forms change
+- admin UI browser automation when admin pages or forms change
 - preview/public parity checks when preview or resolution behavior changes
 - script-level verification for operational scripts
 - typecheck/build only when it adds signal for the changed scope

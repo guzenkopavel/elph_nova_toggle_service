@@ -13,6 +13,7 @@ Prefer the narrowest meaningful verification:
 - contract checks when wire behavior changes,
 - route-level smoke checks for HTTP contract changes,
 - preview/public parity checks when preview or resolution behavior changed,
+- browser or scenario-based automated tests when admin UI or end-to-end operator flows changed,
 - migration-specific checks for DB changes,
 - script-level shell checks for repo tooling,
 - build or typecheck only when it adds signal for the changed scope.

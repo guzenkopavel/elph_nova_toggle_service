@@ -17,6 +17,7 @@ Focus on:
 - exercising the affected public/admin flow end to end,
 - verifying real statuses, redirects, rendered pages, and side effects,
 - checking preview/public parity when applicable,
+- preferring repeatable automation over one-off manual poking,
 - explicitly separating verified flows from unverified ones.
 
 Preferred tooling:
@@ -28,6 +29,7 @@ Rules:
 - Do not replace automated tests; you complement them.
 - Do not run the whole application universe if a narrow scenario is enough.
 - If the required runtime or tooling is missing, explain that clearly and still run the narrowest possible smoke.
+- Manual-only verification is a bootstrap fallback, not the desired final state for implemented API/admin flows.
 - Report exact commands and scenarios, not vague confidence statements.
 
 Output:
@@ -36,4 +38,3 @@ Output:
 3. Results.
 4. What remains unverified.
 5. Residual risk.
-

@@ -7,6 +7,7 @@ Recovered context for the backend implementation of Elph Nova feature toggles st
 The primary source documents currently live in the neighboring iOS repository:
 
 - `../elph-nova-ios/features/featuretoggles/stage-1/server-mvp-plan.md`
+- `../elph-nova-ios/features/featuretoggles/stage-1/server-implementation-plan.md`
 - `../elph-nova-ios/features/featuretoggles/stage-1/server-architecture.md`
 - `../elph-nova-ios/features/featuretoggles/stage-1/server-spec.md`
 - `../elph-nova-ios/features/featuretoggles/stage-1/api-contract.md`
@@ -119,6 +120,8 @@ For each feature key:
   - same service and same API,
   - different ingress topology only.
 
+Конкретный URL, модель доступа к admin на test host, маппинг SSO claims (viewer/editor), и способ доставки manifest artifact зафиксированы в `docs/DELIVERY_CONTOUR.md`.
+
 ## Initial Target Repository Shape
 
 The stage-1 documents align on this initial structure:
@@ -151,12 +154,19 @@ The exact folder map adapted for this repository is documented in `docs/PROJECT_
 6. Add admin UI.
 7. Harden deployment, docs, and verification.
 
-## What This Repository Is Setting Up First
+## Current Implementation State
 
-Before production code starts, this repository now needs:
+Bootstrap is complete. The repository has:
 
-- repo-local agent rules,
-- project subagents for implementation, review, investigation, and planning,
-- repo-local implementation and testing guides,
+- repo-local agent rules and subagent definitions,
+- implementation and testing guides,
 - coordinator prompts and workflow guidance,
 - lightweight repo tooling for agent navigation and indexing.
+
+Task 2 (runtime skeleton) is done: `src/app.ts`, `src/server.ts`, `src/config/env.ts`, `tests/app.test.ts`, `package.json`, `tsconfig.json`, and `vitest.config.ts` exist.
+
+Task 3 (env/logging/health/lifecycle) is done: `src/config/env.ts` is expanded to the full stage-1 schema (all env vars including `LOG_LEVEL`, `TRUST_PROXY`, `DATABASE_URL`, `MANIFEST_PATH`, `DEFAULT_PRODUCT_ID`, `FEATURE_CONFIG_PUBLIC_BASE_URL`, `FEATURE_CONFIG_ADMIN_BASE_URL`, SSO vars, admin vars, `DEV_ADMIN_PASSWORD`, and `CORS_ALLOWED_ORIGINS`), health endpoints and process lifecycle scaffold are in place.
+
+Task 4 (Knex, migrations, persistence foundation) is done: `knexfile.ts`, `src/db/knex.ts`, `src/db/transaction.ts`, four migrations (`products`, `feature_definitions`, `feature_rules`, `config_revisions`), and repository implementations for all four modules (`products`, `definitions`, `rules`, `revisions`) are in place. 27 migration and repository tests cover the persistence layer.
+
+The remaining `src/` zones listed in the target structure are still to be built.

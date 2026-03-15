@@ -20,6 +20,13 @@ This service has several failure modes that are easy to miss if testing stops at
 
 Because of that, agent-driven implementation here must include both automated checks and live smoke verification.
 
+Target state:
+
+- public API is covered by repeatable automated tests,
+- admin write path is covered by repeatable automated tests,
+- admin UI critical flows are covered by repeatable browser automation,
+- the agent can run the verification chain itself before handoff.
+
 ## Mandatory Agent Workflow
 
 ### 1. Define the test surface before editing
@@ -29,7 +36,7 @@ For every non-trivial task, decide which of these are required:
 - unit tests,
 - integration tests,
 - contract checks,
-- admin UI smoke,
+- admin UI browser automation,
 - runtime/deployment smoke.
 
 ### 2. Change code and tests together
@@ -73,6 +80,8 @@ Temporary fallback until Playwright exists:
 - redirect/status checks,
 - public API cross-check after mutation.
 
+That fallback is temporary only. Final verification for implemented admin flows should live as repeatable automated browser tests.
+
 ### 6. Verify preview/public parity
 
 Whenever preview or resolution behavior is touched, verify that preview and public API produce the same resolved output for equivalent inputs.
@@ -91,8 +100,9 @@ Final reporting should state:
 - `fastify.inject()`
 - ephemeral PostgreSQL for integration checks
 - `testcontainers` or a dedicated compose test DB
-- `Playwright` for admin UI browser smoke
+- `Playwright` for repeatable admin UI browser automation
 - `curl` or equivalent for simple runtime smoke
+- repeatable end-to-end API/admin scenario automation before rollout
 
 ## Minimum Test Matrix
 
@@ -166,6 +176,6 @@ Final reporting should state:
 - tests added or updated
 - targeted automated checks run
 - live smoke run when the task affects runtime behavior
-- admin UI smoke run when admin flows change
+- admin UI automated tests run when admin flows change
+- critical affected flow is not left on manual-only verification if automation can be added now
 - explicit note of remaining gaps
-

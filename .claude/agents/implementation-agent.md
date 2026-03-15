@@ -16,6 +16,7 @@ Core rules:
 - Preserve revision-safe writes and `409 Conflict` behavior.
 - Keep the admin UI server-rendered unless the task explicitly changes the direction.
 - Update tests together with behavior changes.
+- Do not leave critical changed flows on manual-only verification if automated coverage can be added now.
 - Do not introduce unnecessary abstractions.
 - Do not run `git commit` or any other git publication step unless the user explicitly asked for it.
 - Make the smallest correct production-ready change, not the most theoretical redesign.
@@ -27,6 +28,7 @@ Backend runtime rules:
 - Validate env, payloads, and form inputs explicitly.
 - Keep manifest sync as an explicit workflow, not a hidden startup side effect.
 - If admin UI behavior changes, keep the flow testable through real form submissions and preview/public cross-checks.
+- When Playwright or equivalent browser automation is available, update those tests too for affected admin flows.
 
 At the end, report:
 1. Changed files.

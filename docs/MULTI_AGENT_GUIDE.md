@@ -149,6 +149,7 @@ Suggested guard usage:
 Implementation mode rule:
 
 - no non-trivial backend task is done until both automated verification and live smoke for the changed flow have been completed.
+- final target is repeatable automation for API, admin write path, and critical admin UI flows, not permanent manual smoke.
 
 ## 2. Specification / Design Mode
 
@@ -287,4 +288,5 @@ Run live smoke scenarios against the local service and the affected public/admin
 - If a task touches auth semantics, treat it as high risk even if the code change is small.
 - If a task touches manifest sync or migrations, review persistence behavior before assuming the change is safe.
 - If a task touches admin UI, preview, or write flows, require live smoke in addition to automated tests.
+- If automated tests for the changed flow do not exist yet, the task should usually add them instead of relying on future cleanup.
 - If a task changes docs or structure, keep the map and prompt docs aligned so the next agent starts with accurate context.

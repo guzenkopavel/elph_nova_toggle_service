@@ -20,15 +20,17 @@ Focus on:
   - unit
   - integration
   - contract
-  - admin UI smoke
+  - admin UI browser automation
   - runtime/deployment smoke
 - whether preview/public parity must be checked,
+- which automated tests must exist by the end of the task,
 - what can be skipped safely and why.
 
 Rules:
 - Do not write production code.
 - Do not propose a giant test plan when a narrow one is enough.
 - Do not treat automated tests as sufficient when the changed flow clearly needs live smoke.
+- Do not treat manual smoke as an acceptable final state when repeatable automation can be added now.
 - Be explicit when admin UI, auth semantics, manifest sync, revisions, or cache invalidation raise the verification bar.
 
 Output:
@@ -37,4 +39,3 @@ Output:
 3. Specific scenarios to cover.
 4. Live smoke requirements.
 5. What can remain unverified for now.
-

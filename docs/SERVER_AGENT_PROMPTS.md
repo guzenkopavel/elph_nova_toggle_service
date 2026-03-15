@@ -69,7 +69,7 @@ Workflow:
 
 3. Call `test-strategy-agent`:
 - define the minimum required test matrix for the change;
-- identify whether unit, integration, contract, admin UI smoke, and runtime smoke are required;
+- identify whether unit, integration, contract, admin UI browser automation, and runtime smoke are required;
 - explicitly call out preview/public parity checks when relevant.
 
 4. Pass the scoped task to the single writer `implementation-agent`.
@@ -84,6 +84,7 @@ Workflow:
 - explicit cache invalidation or rebuild after writes;
 - narrow repository/service/router responsibilities;
 - code and tests must be updated together for behavior changes.
+- if automated tests for the changed flow do not exist yet, add them in the same task whenever feasible.
 
 6. After changes run the relevant guards:
 - always `architecture-guard`;
@@ -99,6 +100,7 @@ Workflow:
 - smoke the affected public/admin flow end to end;
 - if admin UI exists and was touched, exercise the real UI flow;
 - verify preview/public parity when applicable.
+- prefer repeatable automation for these scenarios, not permanent manual smoke.
 
 9. If new files or folders were added, call `repo-indexer`.
 
@@ -132,7 +134,7 @@ After implementation:
 - use `repo-indexer` if files were added;
 - use `docs-sync-agent` if rules or structure changed.
 
-Preserve manifest-first behavior, exact auth semantics, full resolved config responses, revision-safe writes, public/admin separation, testing-first implementation, and no commits unless explicitly requested.
+Preserve manifest-first behavior, exact auth semantics, full resolved config responses, revision-safe writes, public/admin separation, testing-first implementation, repeatable automation for critical flows, and no commits unless explicitly requested.
 ```
 
 ## Branch 2. Bugs
@@ -219,7 +221,7 @@ Start with `repo-navigator`, then always use `bug-investigator`. Reconstruct the
 
 If a fix is required, only then hand the scoped task to `implementation-agent`, run the relevant guards, and finish with `verifier-agent`.
 
-Do not patch on guesswork, define the required test coverage before implementing the fix, and do not commit unless explicitly requested.
+Do not patch on guesswork, define the required automated test coverage before implementing the fix, and do not commit unless explicitly requested.
 ```
 
 ## Branch 3. Specification And Design
@@ -308,6 +310,7 @@ Use these agents as needed:
 Main rules:
 - verification is not just unit tests; include live smoke when runtime behavior matters;
 - if admin UI exists and is affected, exercise the real admin flow;
+- prefer repeatable automation for API/admin scenarios and use manual fallback only when the suite is not yet present;
 - explicitly report verified vs unverified areas;
 - nobody runs `git commit` unless the user explicitly asks.
 
