@@ -11,6 +11,8 @@ Before using the agent set, read:
 - `./PROJECT_ARCHITECTURE.md`
 - `./SERVER_IMPLEMENTATION_PLAN.md`
 - `./SERVER_TEST_PLAN.md`
+- `./DELIVERY_CONTOUR.md`
+- `./DELIVERY_CHANGELOG.md`
 - `./REPO_MAP.md`
 - `./SERVER_AGENT_PROMPTS.md`
 
@@ -101,6 +103,7 @@ Best day-to-day baseline:
 11. `qa-scenario-agent`
 12. optional `repo-indexer`
 13. optional `docs-sync-agent`
+14. optional `delivery-log-agent`
 
 ### Extended Set
 
@@ -119,8 +122,10 @@ For major features, large backend changes, or refactors:
 11. `qa-scenario-agent`
 12. `repo-indexer`
 13. `docs-sync-agent`
+14. optional `delivery-log-agent`
+15. optional `deep-review-agent`
 
-## Four Working Modes
+## Five Working Modes
 
 ## 1. Implementation Mode
 
@@ -137,6 +142,7 @@ Baseline chain:
 - `qa-scenario-agent`
 - optional `repo-indexer`
 - optional `docs-sync-agent`
+- optional `delivery-log-agent`
 
 Suggested guard usage:
 
@@ -150,6 +156,7 @@ Implementation mode rule:
 
 - no non-trivial backend task is done until both automated verification and live smoke for the changed flow have been completed.
 - final target is repeatable automation for API, admin write path, and critical admin UI flows, not permanent manual smoke.
+- if rollout assumptions, defaults, security semantics, testing baseline, or implementation state changed materially, log that delta in one place through `delivery-log-agent`.
 
 ## 2. Specification / Design Mode
 
@@ -171,6 +178,7 @@ Baseline chain:
 - optional `test-strategy-agent`
 - optional `refactor-planner`
 - optional `docs-sync-agent`
+- optional `delivery-log-agent`
 
 By default, this mode should not write production code unless the user explicitly changes direction.
 
@@ -197,6 +205,7 @@ Baseline chain:
 - `qa-scenario-agent` if runtime behavior changed
 - optional `repo-indexer`
 - optional `docs-sync-agent`
+- optional `delivery-log-agent`
 
 Do not jump into code before reconstructing the real current flow.
 
@@ -211,6 +220,8 @@ Baseline chain:
 - `verifier-agent`
 - `qa-scenario-agent`
 - optional relevant guards if the validation discovers suspicious behavior
+- optional `docs-sync-agent`
+- optional `delivery-log-agent` if the validation changes rollout or handoff assumptions
 
 Use this mode for:
 
@@ -219,6 +230,30 @@ Use this mode for:
 - preview/public parity checks,
 - targeted regression verification,
 - handoff confidence before rollout.
+
+## 5. Deep Review Mode
+
+Use when the task is not to write code, but to judge whether an implementation or solution is actually good enough:
+
+- deep review of an existing change set
+- code review with architectural and rollout context
+- request-fit validation
+- review of a large backend solution where narrow guards are not enough
+- checking whether the implementation fits the recovered stage-1 backend history and delivery assumptions
+
+Baseline chain:
+
+- `repo-navigator`
+- optional `module-boundary-guard`
+- `deep-review-agent`
+- `architecture-guard`
+- `async-runtime-guard`
+- optional `api-contract-guard`
+- optional `auth-security-guard`
+- optional `persistence-manifest-guard`
+- optional `verifier-agent` when review must confirm targeted verification
+
+This mode should not write production code by default. First raise context, then form findings.
 
 ## Role Summary
 
@@ -266,6 +301,14 @@ Run the narrowest meaningful checks.
 
 Run live smoke scenarios against the local service and the affected public/admin flows.
 
+### `deep-review-agent`
+
+Perform a high-context review across code quality, architecture fit, request fit, rollout fit, and stage-1 backend history.
+
+### `delivery-log-agent`
+
+Capture material stage-1, rollout, testing-baseline, and implementation-state deltas in one place.
+
 ### Planning Agents
 
 - `specification-writer`
@@ -280,6 +323,7 @@ Run live smoke scenarios against the local service and the affected public/admin
 - `qa-scenario-agent`
 - `repo-indexer`
 - `docs-sync-agent`
+- `delivery-log-agent`
 
 ## Practical Workflow Notes
 
@@ -290,3 +334,5 @@ Run live smoke scenarios against the local service and the affected public/admin
 - If a task touches admin UI, preview, or write flows, require live smoke in addition to automated tests.
 - If automated tests for the changed flow do not exist yet, the task should usually add them instead of relying on future cleanup.
 - If a task changes docs or structure, keep the map and prompt docs aligned so the next agent starts with accurate context.
+- If a task materially changes rollout shape, delivery contour, testing baseline, defaults, or implementation state, use `delivery-log-agent` so the delta is visible in one place.
+- If the user asks for a review or the change set is large enough that request-fit and rollout-fit matter, use `deep-review-agent` instead of relying only on narrow guards.

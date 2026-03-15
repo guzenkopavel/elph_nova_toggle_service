@@ -14,7 +14,7 @@ while IFS= read -r file; do
   rel="${file#./}"
 
   case "$rel" in
-    .git/*|node_modules/*|dist/*|coverage/*|.next/*|.turbo/*|.cache/*|*.DS_Store)
+    .git/*|node_modules/*|dist/*|coverage/*|.next/*|.turbo/*|.cache/*|data/*|manifest/*|test-results/*|*.DS_Store)
       continue
       ;;
   esac
@@ -32,6 +32,9 @@ done < <(
     ! -path './.next/*' \
     ! -path './.turbo/*' \
     ! -path './.cache/*' \
+    ! -path './data/*' \
+    ! -path './manifest/*' \
+    ! -path './test-results/*' \
     ! -name '.DS_Store' \
     | sort
 )

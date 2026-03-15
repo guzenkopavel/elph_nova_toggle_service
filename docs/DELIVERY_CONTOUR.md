@@ -4,6 +4,8 @@
 
 Этот документ фиксирует конкретные решения, которые последующие задачи (Tasks 2–12) используют как тестовый и smoke-baseline.
 
+Material rollout и stage-1 deltas дополнительно фиксируются в `docs/DELIVERY_CHANGELOG.md`, чтобы важные изменения не терялись между несколькими планами и implementation docs.
+
 ---
 
 ## 1. Standalone Public URL

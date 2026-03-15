@@ -66,6 +66,10 @@ Excluded from indexing by default:
   - keeps the repository map aligned with the filesystem
 - `.claude/agents/docs-sync-agent.md`
   - updates docs only when real rules or structure changed
+- `.claude/agents/delivery-log-agent.md`
+  - captures material rollout, stage-1, testing-baseline, and implementation-state deltas in one place
+- `.claude/agents/deep-review-agent.md`
+  - performs high-context review across code, architecture, request fit, rollout fit, and stage-1 backend history
 - `.claude/agents/specification-writer.md`
   - writes feature/spec documents before implementation
 - `.claude/agents/architecture-designer.md`
@@ -92,11 +96,13 @@ Excluded from indexing by default:
 - `docs/CODEBASE_INDEX.md`
   - deeper index of current docs, scripts, and planned backend zones
 - `docs/MULTI_AGENT_GUIDE.md`
-  - practical guide for multi-agent work in this repository
+  - practical guide for multi-agent work in this repository, including deep review and delivery logging
 - `docs/SERVER_AGENT_PROMPTS.md`
-  - ready coordinator prompts for implementation, bugs, and design work
+  - ready coordinator prompts for implementation, bugs, design, verification, and deep review work
 - `docs/DELIVERY_CONTOUR.md`
   - delivery contour and service discovery contract: standalone URL, client baseURL discovery, admin access model, SSO role mapping, manifest artifact delivery, and smoke baseline for Tasks 2–12
+- `docs/DELIVERY_CHANGELOG.md`
+  - newest-first log of material stage-1, rollout, testing-baseline, and implementation-state deltas
 - `docs/DOCUMENTATION_INDEX.md`
   - quick index of repository documentation
 - `docs/README_DOCUMENTATION.md`
@@ -112,11 +118,17 @@ Excluded from indexing by default:
   - standalone CLI: loads manifest from `MANIFEST_PATH`, builds registry, runs `ManifestSyncService.sync()`, exits non-zero on failure
 - `scripts/smoke-auth.sh`
   - shell smoke script covering the four auth scenarios: anonymous (no header → 200), authenticated (valid bearer → 200), invalid token (bad bearer → 401), and infra failure path
+- `scripts/smoke-rollout.sh`
+  - repeatable pre-release smoke matrix for health, public auth semantics, security headers, and admin contour checks against a running instance
 
 ## Root Config Files
 
+- `.gitignore`
+  - local ignore policy for runtime artifacts, local DB files, browser results, and dependency/build output
 - `package.json`
   - npm manifest, dependency declarations, and npm scripts
+- `package-lock.json`
+  - npm lockfile pinning the exact dependency graph for local and CI installs
 - `.env.example`
   - documented template of all supported environment variables
 - `knexfile.ts`
@@ -282,6 +294,17 @@ Excluded from indexing by default:
 
 - `tests/modules/admin/ui-routes.test.ts`
   - 22 `fastify.inject()` tests (groups UI-H auth boundary, UI-C CSRF, UI-V validation, UI-R rule CRUD pages, UI-QT preview query, UI-S service error mapping) for `adminUiPlugin` against an in-memory SQLite instance
+
+## `tests/modules/hardening`
+
+- `tests/modules/hardening/helpers.ts`
+  - shared helpers for hardening-focused integration tests, including app bootstrap with env overrides and request helpers
+- `tests/modules/hardening/rate-limit.test.ts`
+  - integration tests for public/admin rate limiting and per-contour limits
+- `tests/modules/hardening/security-headers.test.ts`
+  - integration tests for `@fastify/helmet` response headers on public and admin routes
+- `tests/modules/hardening/cors.test.ts`
+  - integration tests for `@fastify/cors` behavior on the public contour and its absence on admin routes
 
 ## `tests/e2e`
 

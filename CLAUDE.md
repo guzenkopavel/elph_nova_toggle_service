@@ -190,3 +190,7 @@ Keep the following docs aligned with reality when changes affect them:
 - `docs/SERVER_TEST_PLAN.md`
 - `docs/MULTI_AGENT_GUIDE.md`
 - `docs/SERVER_AGENT_PROMPTS.md`
+- `docs/DELIVERY_CONTOUR.md`
+- `docs/DELIVERY_CHANGELOG.md`
+
+If rollout assumptions, admin exposure model, testing baseline, security semantics, or overall implementation state changed materially, capture that delta in `docs/DELIVERY_CHANGELOG.md` as well.

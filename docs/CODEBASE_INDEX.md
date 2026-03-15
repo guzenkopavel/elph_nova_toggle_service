@@ -52,7 +52,7 @@ Local testing companion:
 - mandatory agent testing workflow
 - recommended tooling
 - minimum test matrix
-- admin UI smoke expectations
+- admin UI browser automation expectations
 
 ### `docs/MULTI_AGENT_GUIDE.md`
 
@@ -60,7 +60,8 @@ Practical coordination guide for multi-agent work:
 
 - single-writer rule
 - recommended agent compositions
-- implementation, bug, and design workflows
+- implementation, bug, design, verification, and deep review workflows
+- when to use delivery logging for material stage-1 or rollout deltas
 
 ### `docs/SERVER_AGENT_PROMPTS.md`
 
@@ -70,6 +71,7 @@ Ready-to-use coordinator prompts for:
 - bug investigation workflow
 - specification/design workflow
 - verification and QA workflow
+- deep review workflow
 
 ### `docs/DELIVERY_CONTOUR.md`
 
@@ -81,6 +83,15 @@ Delivery contour and service discovery contract:
 - SSO claims and server-side role mapping (viewer/editor)
 - manifest artifact delivery method (volume mount vs baked image)
 - deployment baseline table and pre-release smoke checklist for Tasks 2–12
+
+### `docs/DELIVERY_CHANGELOG.md`
+
+Newest-first log for material backend delivery deltas:
+
+- multi-agent workflow changes
+- rollout or admin exposure model changes
+- testing-baseline or verification-model changes
+- implementation-state milestones that should be visible in one place
 
 ## 2. Current Source and Test Files
 

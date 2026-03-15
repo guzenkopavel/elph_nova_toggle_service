@@ -27,6 +27,8 @@ Recommended backend baseline:
 9. `persistence-manifest-guard`
 10. `verifier-agent`
 11. `qa-scenario-agent`
+12. `docs-sync-agent` when rules, structure, or local docs changed
+13. `delivery-log-agent` when a material stage-1 or rollout delta should be visible in one place
 
 Important rules:
 
@@ -46,11 +48,39 @@ Bug investigation agent:
 
 - `bug-investigator`
 
+Deep review agent:
+
+- `deep-review-agent`
+
 Support agents:
 
 - `qa-scenario-agent`
 - `repo-indexer`
 - `docs-sync-agent`
+- `delivery-log-agent`
+
+Recommended bug workflow:
+
+1. `repo-navigator`
+2. optional `module-boundary-guard`
+3. `bug-investigator`
+4. `test-strategy-agent` if a real fix is needed
+5. `implementation-agent` if a real fix is required
+6. relevant guards
+7. `verifier-agent`
+8. `qa-scenario-agent` when runtime behavior changed
+9. `docs-sync-agent` if behavior, docs, or structure changed
+10. `delivery-log-agent` if the fix changed stage-1 behavior, rollout assumptions, or implementation state
+
+Recommended deep review workflow:
+
+1. `repo-navigator`
+2. optional `module-boundary-guard`
+3. `deep-review-agent`
+4. `architecture-guard`
+5. `async-runtime-guard`
+6. optional `api-contract-guard` / `auth-security-guard` / `persistence-manifest-guard`
+7. optional `verifier-agent` when review should confirm targeted verification
 
 See also:
 

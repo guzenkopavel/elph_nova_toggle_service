@@ -11,16 +11,19 @@ Before using these prompts, read:
 - `./PROJECT_ARCHITECTURE.md`
 - `./SERVER_IMPLEMENTATION_PLAN.md`
 - `./SERVER_TEST_PLAN.md`
+- `./DELIVERY_CONTOUR.md`
+- `./DELIVERY_CHANGELOG.md`
 - `./REPO_MAP.md`
 
 This repository follows the same multi-agent philosophy as `elph-nova-ios`, but adapted for a Node.js service.
 
-## Four Main Branches
+## Five Main Branches
 
 1. Implementation
 2. Bugs
 3. Specification and design
 4. Verification and QA
+5. Deep review
 
 ## Branch 1. Implementation
 
@@ -47,6 +50,7 @@ Use these agents as needed:
 - `qa-scenario-agent`
 - `repo-indexer`
 - `docs-sync-agent`
+- `delivery-log-agent`
 
 Main rules:
 - production code is written only by `implementation-agent`;
@@ -106,6 +110,8 @@ Workflow:
 
 10. If project rules, structure, or docs became stale, call `docs-sync-agent`.
 
+11. If the task materially changed rollout shape, delivery contour, security semantics, testing baseline, or implementation state, call `delivery-log-agent`.
+
 Response format:
 1. Scope
 2. Plan
@@ -133,6 +139,7 @@ After implementation:
 - run `qa-scenario-agent` for live smoke when runtime behavior changed;
 - use `repo-indexer` if files were added;
 - use `docs-sync-agent` if rules or structure changed.
+- use `delivery-log-agent` if a material stage-1 or rollout delta should be visible in one place.
 
 Preserve manifest-first behavior, exact auth semantics, full resolved config responses, revision-safe writes, public/admin separation, testing-first implementation, repeatable automation for critical flows, and no commits unless explicitly requested.
 ```
@@ -163,6 +170,7 @@ Use these agents as needed:
 - `qa-scenario-agent`
 - `repo-indexer`
 - `docs-sync-agent`
+- `delivery-log-agent`
 
 Main rules:
 - investigate first, then code;
@@ -199,6 +207,8 @@ Workflow:
 
 7. If the task added files, call `repo-indexer`.
 
+8. If the fix changed real stage-1 behavior, rollout assumptions, testing baseline, or implementation state, call `delivery-log-agent`.
+
 Response format:
 1. Scope
 2. Diagnosis
@@ -221,7 +231,7 @@ Start with `repo-navigator`, then always use `bug-investigator`. Reconstruct the
 
 If a fix is required, only then hand the scoped task to `implementation-agent`, run the relevant guards, and finish with `verifier-agent`.
 
-Do not patch on guesswork, define the required automated test coverage before implementing the fix, and do not commit unless explicitly requested.
+Do not patch on guesswork, define the required automated test coverage before implementing the fix, use `delivery-log-agent` if the fix changes material stage-1 behavior or rollout assumptions, and do not commit unless explicitly requested.
 ```
 
 ## Branch 3. Specification And Design
@@ -245,6 +255,7 @@ Use these agents as needed:
 - `refactor-planner`
 - `repo-indexer`
 - `docs-sync-agent`
+- `delivery-log-agent`
 
 Main rules:
 - do not write production code by default;
@@ -266,6 +277,7 @@ Workflow:
 - `refactor-planner` for staged refactor or migration design.
 4. Do not switch to production coding unless the user explicitly changes mode.
 5. If the result should live in the repo, update docs and use `docs-sync-agent` when helpful.
+6. If the design materially changes rollout, delivery contour, defaults, security assumptions, testing baseline, or implementation state, call `delivery-log-agent`.
 
 Response format:
 1. Scope
@@ -285,7 +297,7 @@ Task:
 
 Start with `repo-navigator`, optionally use `module-boundary-guard`, then use `specification-writer`, `architecture-designer`, `implementation-planner`, and `refactor-planner` as needed.
 
-Do not write production code by default. Keep the work grounded in the stage-1 backend plan, include the required testing strategy, and update docs if the resulting design should live in the repository.
+Do not write production code by default. Keep the work grounded in the stage-1 backend plan, include the required testing strategy, update docs if the resulting design should live in the repository, and use `delivery-log-agent` when a material stage-1 delta should be visible in one place.
 ```
 
 ## Branch 4. Verification And QA
@@ -306,6 +318,7 @@ Use these agents as needed:
 - `qa-scenario-agent`
 - relevant guards only if the verification uncovers suspicious behavior
 - `docs-sync-agent` if the discovered workflow shows stale docs
+- `delivery-log-agent` if the verification changes rollout or handoff assumptions
 
 Main rules:
 - verification is not just unit tests; include live smoke when runtime behavior matters;
@@ -348,5 +361,77 @@ Task:
 
 Start with `repo-navigator`, then `test-strategy-agent`, then run `verifier-agent` for automated checks and `qa-scenario-agent` for live smoke of the affected flows, including admin UI and preview/public parity when relevant.
 
-Report exactly what was verified and what remains unverified.
+Report exactly what was verified and what remains unverified. If verification changes rollout or handoff assumptions, sync docs and use `delivery-log-agent`.
+```
+
+## Branch 5. Deep Review
+
+Use this branch when the task is not to write code, but to assess whether a change or proposed solution is actually sound across code, architecture, request fit, rollout fit, and stage-1 backend history.
+
+### Baseline Coordinator Prompt
+
+```text
+Work in the `elph_nova_toggle_service` repository as the coordinator for backend deep review workflow.
+
+Use project subagents from `.claude/agents` if they are available.
+
+Use these agents as needed:
+- `repo-navigator`
+- `module-boundary-guard`
+- `deep-review-agent`
+- `architecture-guard`
+- `async-runtime-guard`
+- `api-contract-guard`
+- `auth-security-guard`
+- `persistence-manifest-guard`
+- `verifier-agent`
+
+Main rules:
+- do not write production code by default;
+- do not form findings until the surrounding backend and stage-1 context has been raised;
+- review not only the local code, but also request-fit, rollout-fit, testing-fit, and consistency with `docs/FEATURE_CONFIG_SERVICE_CONTEXT.md`, `docs/DELIVERY_CONTOUR.md`, and relevant stage-1 source docs;
+- nobody runs `git commit` unless the user explicitly asks.
+
+My task:
+<insert task>
+
+Workflow:
+1. Call `repo-navigator` and narrow the scope.
+2. If placement or subsystem ownership is unclear, call `module-boundary-guard`.
+3. Call `deep-review-agent`:
+- raise the backend and stage-1 context;
+- identify what changed or what is being proposed;
+- assess code-fit, architecture-fit, solution-fit, request-fit, and rollout-fit;
+- check whether the solution contradicts source-of-truth docs or delivery assumptions;
+- call out hidden regressions, verification gaps, or unnecessary complexity.
+4. Then add narrow review guards by risk:
+- `architecture-guard`
+- `async-runtime-guard`
+- `api-contract-guard`
+- `auth-security-guard`
+- `persistence-manifest-guard`
+5. If needed, run `verifier-agent` to confirm whether targeted verification is sufficient.
+
+Response format:
+1. Scope
+2. Context Reviewed
+3. What Changed
+4. Findings
+5. Open Questions / Assumptions
+6. Residual Risks
+```
+
+### Short Version
+
+```text
+Work in `elph_nova_toggle_service` using the backend deep review workflow.
+
+Task:
+<insert task>
+
+Start with `repo-navigator`, then `deep-review-agent`. Raise the backend context, rollout assumptions, and relevant stage-1 docs before forming findings.
+
+After that, run the narrow guards that match the risk area and use `verifier-agent` only if the review must confirm targeted verification.
+
+Review not only local code quality, but also request-fit, architecture-fit, rollout-fit, and consistency with the stage-1 source-of-truth.
 ```
