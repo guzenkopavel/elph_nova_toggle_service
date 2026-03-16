@@ -1,23 +1,562 @@
 {
   "manifestVersion": 1,
   "product": {
-    "id": "test-product",
-    "name": "Elph Nova Test"
+    "id": "elph_nova",
+    "name": "Elph Nova"
+  },
+  "swift": {
+    "typePrefix": "ElphNova",
+    "outputFileName": "ElphNovaGeneratedFeatures.swift",
+    "registryTypeName": "ElphNovaFeatureRegistry",
+    "payloadDecoderRegistryTypeName": "ElphNovaPayloadDecoderRegistry",
+    "catalogTypeName": "ElphNovaFeatureCatalog"
   },
   "features": [
     {
       "key": "chat",
-      "name": "Chat Feature",
+      "name": "Чаты",
+      "description": "Раздел чатов и все входящие в него функции. Disabled — раздел скрыт.",
+      "owner": "mobile-core",
       "deliveryMode": "remoteCapable",
       "sourcePriorityMode": "serverWins",
-      "defaultEntry": { "isEnabled": false }
+      "defaultEntry": { "isEnabled": true, "name": "Чаты", "description": "Fallback: чаты включены." }
     },
     {
-      "key": "video_call",
-      "name": "Video Call",
+      "key": "calls",
+      "name": "Звонки/конференции",
+      "description": "Раздел звонков и конференций. Disabled — раздел скрыт.",
+      "owner": "mobile-core",
       "deliveryMode": "remoteCapable",
       "sourcePriorityMode": "serverWins",
-      "defaultEntry": { "isEnabled": false }
+      "defaultEntry": { "isEnabled": true, "name": "Звонки/конференции", "description": "Fallback: звонки включены." }
+    },
+    {
+      "key": "widgets",
+      "name": "Mini-app",
+      "description": "Раздел mini-app. Disabled — раздел скрыт.",
+      "owner": "mobile-core",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": true, "name": "Mini-app", "description": "Fallback: виджеты включены." }
+    },
+    {
+      "key": "chat.attachments",
+      "name": "Прикрепление файлов",
+      "description": "Функция прикрепления файлов в чате. Disabled — кнопка скрыта.",
+      "owner": "mobile-chat",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": true, "name": "Прикрепление файлов", "description": "Fallback: прикрепление включено." }
+    },
+    {
+      "key": "chat.edit_message",
+      "name": "Редактирование сообщений",
+      "description": "Возможность редактировать отправленные сообщения. Disabled — действие скрыто.",
+      "owner": "mobile-chat",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": true, "name": "Редактирование сообщений", "description": "Fallback: редактирование включено." }
+    },
+    {
+      "key": "chat.delete_message",
+      "name": "Удаление сообщений",
+      "description": "Возможность удалять сообщения. Disabled — действие скрыто.",
+      "owner": "mobile-chat",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": true, "name": "Удаление сообщений", "description": "Fallback: удаление включено." }
+    },
+    {
+      "key": "chat.message_selection",
+      "name": "Выбор сообщений",
+      "description": "Режим мультиселекта сообщений. Disabled — режим недоступен.",
+      "owner": "mobile-chat",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": true, "name": "Выбор сообщений", "description": "Fallback: выбор включён." }
+    },
+    {
+      "key": "chat.message_forward",
+      "name": "Пересылка сообщений",
+      "description": "Возможность пересылать сообщения. Disabled — действие скрыто.",
+      "owner": "mobile-chat",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": true, "name": "Пересылка сообщений", "description": "Fallback: пересылка включена." }
+    },
+    {
+      "key": "chat.copy_message_text",
+      "name": "Копировать текст сообщения",
+      "description": "Действие копирования текста. Disabled — действие скрыто.",
+      "owner": "mobile-chat",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": true, "name": "Копировать текст сообщения", "description": "Fallback: копирование включено." }
+    },
+    {
+      "key": "chat.chat_media_gallery",
+      "name": "Вложения чата",
+      "description": "Экран медиа и файлов чата. Disabled — пункт меню скрыт.",
+      "owner": "mobile-chat",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "swiftKeyTypeName": "ChatMediaGalleryKey",
+      "defaultEntry": { "isEnabled": true, "name": "Вложения чата", "description": "Fallback: галерея включена." }
+    },
+    {
+      "key": "chat.emoji",
+      "name": "Эмодзи",
+      "description": "Клавиатура эмодзи в чате. Disabled — кнопка скрыта.",
+      "owner": "mobile-chat",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": true, "name": "Эмодзи", "description": "Fallback: эмодзи включены." }
+    },
+    {
+      "key": "chat.message_reactions",
+      "name": "Реакции на сообщения",
+      "description": "Реакции emoji на сообщения. Disabled — реакции скрыты.",
+      "owner": "mobile-chat",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": true, "name": "Реакции на сообщения", "description": "Fallback: реакции включены." }
+    },
+    {
+      "key": "chat.mentions",
+      "name": "Упоминания (@all, @user)",
+      "description": "Упоминания пользователей и @all. Disabled — функция скрыта.",
+      "owner": "mobile-chat",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": true, "name": "Упоминания", "description": "Fallback: упоминания включены." }
+    },
+    {
+      "key": "chat.pinned_messages",
+      "name": "Закрепление сообщений",
+      "description": "Функция закрепления сообщений. Disabled — действие скрыто.",
+      "owner": "mobile-chat",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": true, "name": "Закрепление сообщений", "description": "Fallback: закрепление включено." }
+    },
+    {
+      "key": "chat.threads",
+      "name": "Треды",
+      "description": "Цепочки ответов (треды). Disabled — кнопка «К обсуждению» скрыта.",
+      "owner": "mobile-chat",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": true, "name": "Треды", "description": "Fallback: треды включены." }
+    },
+    {
+      "key": "chat.chat_folders",
+      "name": "Папки с чатами",
+      "description": "Организация чатов по папкам. Disabled — все чаты в одном списке.",
+      "owner": "mobile-chat",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "swiftKeyTypeName": "ChatFoldersKey",
+      "defaultEntry": { "isEnabled": true, "name": "Папки с чатами", "description": "Fallback: папки включены." }
+    },
+    {
+      "key": "chat.polls",
+      "name": "Опросы",
+      "description": "Создание и участие в опросах. Disabled — функция скрыта.",
+      "owner": "mobile-chat",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": true, "name": "Опросы", "description": "Fallback: опросы включены." }
+    },
+    {
+      "key": "chat.chatbots",
+      "name": "Чат-боты",
+      "description": "Интеграции с чат-ботами. Disabled — боты скрыты в интерфейсе.",
+      "owner": "mobile-chat",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "swiftKeyTypeName": "ChatBotsKey",
+      "defaultEntry": { "isEnabled": true, "name": "Чат-боты", "description": "Fallback: чат-боты включены." }
+    },
+    {
+      "key": "calls.screen_sharing",
+      "name": "Демонстрация экрана",
+      "description": "Шаринг экрана во время звонка/конференции. Disabled — кнопка скрыта.",
+      "owner": "mobile-calls",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": true, "name": "Демонстрация экрана", "description": "Fallback: шаринг экрана включён." }
+    },
+    {
+      "key": "calls.background_blur_replace",
+      "name": "Размытие/замена фона",
+      "description": "Эффекты фона при включённой камере. Disabled — функция скрыта.",
+      "owner": "mobile-calls",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": true, "name": "Размытие/замена фона", "description": "Fallback: эффекты фона включены." }
+    },
+    {
+      "key": "calls.conference_reactions",
+      "name": "Реакции в конференции",
+      "description": "Реакции участников конференции. Disabled — функция скрыта.",
+      "owner": "mobile-calls",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": true, "name": "Реакции в конференции", "description": "Fallback: реакции включены." }
+    },
+    {
+      "key": "calls.conference_chat",
+      "name": "Чат конференции",
+      "description": "Встроенный чат внутри конференции. Disabled — функция скрыта.",
+      "owner": "mobile-calls",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": true, "name": "Чат конференции", "description": "Fallback: чат конференции включён." }
+    },
+    {
+      "key": "calls.call_chat",
+      "name": "Чат звонка",
+      "description": "Встроенный чат внутри обычного звонка. Disabled — функция скрыта.",
+      "owner": "mobile-calls",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "swiftKeyTypeName": "CallChatKey",
+      "defaultEntry": { "isEnabled": true, "name": "Чат звонка", "description": "Fallback: чат звонка включён." }
+    },
+    {
+      "key": "calls.phone_dialer",
+      "name": "Номеронабиратель",
+      "description": "Экран ручного набора номера. Disabled — пункт не отображается.",
+      "owner": "mobile-calls",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": true, "name": "Номеронабиратель", "description": "Fallback: номеронабиратель включён." }
+    },
+    {
+      "key": "widgets.welcome_course",
+      "name": "Mini-app «Welcome-курс»",
+      "description": "Welcome-курс в разделе мини-приложений. Disabled — не отображается.",
+      "owner": "mobile-core",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": true, "name": "Mini-app «Welcome-курс»", "description": "Fallback: welcome-курс включён." }
+    },
+    {
+      "key": "smg.new_design",
+      "name": "Новый дизайн",
+      "description": "Переход на обновлённую дизайн-систему. Управляется конфигурацией SMG.",
+      "owner": "mobile-core",
+      "deliveryMode": "manualOnly",
+      "sourcePriorityMode": "localWins",
+      "swiftKeyTypeName": "SmgNewDesignKey",
+      "defaultEntry": { "isEnabled": false, "name": "Новый дизайн", "description": "Fallback: старый дизайн." }
+    },
+    {
+      "key": "smg.dnd_mode",
+      "name": "Режим DND",
+      "description": "Do Not Disturb — управляется конфигурацией SMG.",
+      "owner": "mobile-core",
+      "deliveryMode": "manualOnly",
+      "sourcePriorityMode": "localWins",
+      "swiftKeyTypeName": "SmgDndModeKey",
+      "defaultEntry": { "isEnabled": false, "name": "Режим DND", "description": "Fallback: DND выключен." }
+    },
+    {
+      "key": "smg.call_forwarding",
+      "name": "Переадресация вызовов",
+      "description": "Поддержка переадресации — управляется конфигурацией SMG.",
+      "owner": "mobile-core",
+      "deliveryMode": "manualOnly",
+      "sourcePriorityMode": "localWins",
+      "swiftKeyTypeName": "SmgCallForwardingKey",
+      "defaultEntry": { "isEnabled": false, "name": "Переадресация вызовов", "description": "Fallback: переадресация выключена." }
+    },
+    {
+      "key": "smg.elph_api",
+      "name": "Elph API (teleconference)",
+      "description": "Доступность Elph teleconference API. Управляется конфигурацией SMG.",
+      "owner": "mobile-core",
+      "deliveryMode": "manualOnly",
+      "sourcePriorityMode": "localWins",
+      "swiftKeyTypeName": "SmgElphApiKey",
+      "defaultEntry": { "isEnabled": false, "name": "Elph API", "description": "Fallback: Elph API выключен." }
+    },
+    {
+      "key": "smg.call_api",
+      "name": "Call API",
+      "description": "Доступность Call API. Управляется конфигурацией SMG.",
+      "owner": "mobile-core",
+      "deliveryMode": "manualOnly",
+      "sourcePriorityMode": "localWins",
+      "swiftKeyTypeName": "SmgCallApiKey",
+      "defaultEntry": { "isEnabled": false, "name": "Call API", "description": "Fallback: Call API выключен." }
+    },
+    {
+      "key": "smg.auto_attendant",
+      "name": "Автосекретарь",
+      "description": "Функциональность автосекретаря. Управляется конфигурацией SMG.",
+      "owner": "mobile-core",
+      "deliveryMode": "manualOnly",
+      "sourcePriorityMode": "localWins",
+      "swiftKeyTypeName": "SmgAutoAttendantKey",
+      "defaultEntry": { "isEnabled": false, "name": "Автосекретарь", "description": "Fallback: автосекретарь выключен." }
+    },
+    {
+      "key": "smg.call_backend",
+      "name": "Call Backend",
+      "description": "Идентификатор выбранного call backend. Управляется конфигурацией SMG.",
+      "owner": "mobile-core",
+      "deliveryMode": "manualOnly",
+      "sourcePriorityMode": "localWins",
+      "swiftKeyTypeName": "SmgCallBackendKey",
+      "payload": {
+        "swiftTypeName": "SmgCallBackendPayload",
+        "fields": [
+          {
+            "name": "value",
+            "type": "string",
+            "description": "Строковый идентификатор call backend (например, «pjsip» или «webrtc»)."
+          }
+        ]
+      },
+      "defaultEntry": {
+        "isEnabled": false,
+        "payload": { "value": "pjsip" },
+        "name": "Call Backend",
+        "description": "Fallback: backend pjsip."
+      }
+    },
+    {
+      "key": "smg.oidc_offline_scope",
+      "name": "OIDC offline_access scope",
+      "description": "Добавлять offline_access scope при OIDC авторизации. Управляется конфигурацией SMG.",
+      "owner": "mobile-core",
+      "deliveryMode": "manualOnly",
+      "sourcePriorityMode": "localWins",
+      "swiftKeyTypeName": "SmgOidcOfflineScopeKey",
+      "defaultEntry": { "isEnabled": false, "name": "OIDC offline_access scope", "description": "Fallback: scope не добавляется." }
+    },
+    {
+      "key": "debug.conference_details_mock",
+      "name": "Conference Details Mock",
+      "description": "Использовать mock-репозиторий для деталей конференции. Только для разработки.",
+      "owner": "mobile-calls",
+      "deliveryMode": "debugOnly",
+      "sourcePriorityMode": "localWins",
+      "swiftKeyTypeName": "DebugConferenceDetailsMockKey",
+      "defaultEntry": { "isEnabled": false, "name": "Conference Details Mock", "description": "Fallback: mock выключен." }
+    },
+    {
+      "key": "debug.background_update_time",
+      "name": "Background Update Time Override",
+      "description": "Переопределение интервала фоновой перерегистрации. isEnabled — override активен; seconds — значение в секундах. 0 или isEnabled=false — использовать системное умолчание (86400 с).",
+      "owner": "mobile-core",
+      "deliveryMode": "debugOnly",
+      "sourcePriorityMode": "localWins",
+      "swiftKeyTypeName": "DebugBackgroundUpdateTimeKey",
+      "payload": {
+        "swiftTypeName": "DebugBackgroundUpdateTimePayload",
+        "fields": [
+          {
+            "name": "seconds",
+            "type": "int",
+            "description": "Интервал перерегистрации в секундах. 0 = использовать системное умолчание."
+          }
+        ]
+      },
+      "defaultEntry": {
+        "isEnabled": false,
+        "payload": { "seconds": 0 },
+        "name": "Background Update Time Override",
+        "description": "Fallback: override выключен, используется системное умолчание."
+      }
+    },
+    {
+      "key": "debug.invite_income_end_time",
+      "name": "Invite Income End Time Override",
+      "description": "Переопределение таймаута входящего звонка без инвайта. isEnabled — override активен; seconds — значение. 0 или isEnabled=false — использовать PJSipLibrary.reportTime.",
+      "owner": "mobile-core",
+      "deliveryMode": "debugOnly",
+      "sourcePriorityMode": "localWins",
+      "swiftKeyTypeName": "DebugInviteIncomeEndTimeKey",
+      "payload": {
+        "swiftTypeName": "DebugInviteIncomeEndTimePayload",
+        "fields": [
+          {
+            "name": "seconds",
+            "type": "int",
+            "description": "Таймаут в секундах. 0 = использовать PJSipLibrary.reportTime."
+          }
+        ]
+      },
+      "defaultEntry": {
+        "isEnabled": false,
+        "payload": { "seconds": 0 },
+        "name": "Invite Income End Time Override",
+        "description": "Fallback: override выключен, используется PJSipLibrary.reportTime."
+      }
+    },
+    {
+      "key": "debug.call_end_time",
+      "name": "Call End Time Override",
+      "description": "Переопределение таймаута входящего звонка без ответа. isEnabled — override активен; seconds — значение. 0 или isEnabled=false — использовать PJSipLibrary.callTimeCancel.",
+      "owner": "mobile-core",
+      "deliveryMode": "debugOnly",
+      "sourcePriorityMode": "localWins",
+      "swiftKeyTypeName": "DebugCallEndTimeKey",
+      "payload": {
+        "swiftTypeName": "DebugCallEndTimePayload",
+        "fields": [
+          {
+            "name": "seconds",
+            "type": "int",
+            "description": "Таймаут в секундах. 0 = использовать PJSipLibrary.callTimeCancel."
+          }
+        ]
+      },
+      "defaultEntry": {
+        "isEnabled": false,
+        "payload": { "seconds": 0 },
+        "name": "Call End Time Override",
+        "description": "Fallback: override выключен, используется PJSipLibrary.callTimeCancel."
+      }
+    },
+    {
+      "key": "local.mattermost_migration_fix",
+      "name": "Mattermost Migration Fix",
+      "description": "Включает фикс миграции Mattermost. Локальный флаг — не управляется сервером.",
+      "owner": "mobile-chat",
+      "deliveryMode": "localOnly",
+      "sourcePriorityMode": "localWins",
+      "swiftKeyTypeName": "LocalMattermostMigrationFixKey",
+      "defaultEntry": { "isEnabled": true, "name": "Mattermost Migration Fix", "description": "Fallback: фикс включён." }
+    },
+    {
+      "key": "local.thread_room_drafts",
+      "name": "Thread Room Drafts",
+      "description": "Черновики в тредах комнат. Локальный флаг — не управляется сервером.",
+      "owner": "mobile-chat",
+      "deliveryMode": "localOnly",
+      "sourcePriorityMode": "localWins",
+      "swiftKeyTypeName": "LocalThreadRoomDraftsKey",
+      "defaultEntry": { "isEnabled": false, "name": "Thread Room Drafts", "description": "Fallback: черновики треды выключены." }
+    },
+    {
+      "key": "local.sip_transport_override",
+      "name": "SIP Transport Override",
+      "description": "Переопределение типа SIP-транспорта. isEnabled — активирует override; transportType в payload задаёт тип.",
+      "owner": "mobile-core",
+      "deliveryMode": "localOnly",
+      "sourcePriorityMode": "localWins",
+      "swiftKeyTypeName": "LocalSipTransportOverrideKey",
+      "payload": {
+        "swiftTypeName": "LocalSipTransportOverridePayload",
+        "fields": [
+          {
+            "name": "transportType",
+            "type": "int",
+            "description": "Тип транспорта: PJSIP_TRANSPORT_* (2 = TCP по умолчанию)."
+          }
+        ]
+      },
+      "defaultEntry": {
+        "isEnabled": false,
+        "payload": { "transportType": 2 },
+        "name": "SIP Transport Override",
+        "description": "Fallback: override выключен, транспорт TCP (2)."
+      }
+    }
+  ],
+  "groups": [
+    {
+      "groupID": "main_shell",
+      "swiftTypeName": "MainShellGroup",
+      "name": "Главные разделы",
+      "description": "Корневые ключи разделов приложения: чаты, звонки, виджеты.",
+      "keys": ["chat", "calls", "widgets"]
+    },
+    {
+      "groupID": "chat_capabilities",
+      "swiftTypeName": "ChatCapabilitiesGroup",
+      "name": "Возможности чата",
+      "description": "Все функциональные ключи раздела чатов.",
+      "keys": [
+        "chat.attachments",
+        "chat.edit_message",
+        "chat.delete_message",
+        "chat.message_selection",
+        "chat.message_forward",
+        "chat.copy_message_text",
+        "chat.chat_media_gallery",
+        "chat.emoji",
+        "chat.message_reactions",
+        "chat.mentions",
+        "chat.pinned_messages",
+        "chat.threads",
+        "chat.chat_folders",
+        "chat.polls",
+        "chat.chatbots"
+      ]
+    },
+    {
+      "groupID": "calls_capabilities",
+      "swiftTypeName": "CallsCapabilitiesGroup",
+      "name": "Возможности звонков",
+      "description": "Все функциональные ключи раздела звонков и конференций.",
+      "keys": [
+        "calls.screen_sharing",
+        "calls.background_blur_replace",
+        "calls.conference_reactions",
+        "calls.conference_chat",
+        "calls.call_chat",
+        "calls.phone_dialer"
+      ]
+    },
+    {
+      "groupID": "widgets_capabilities",
+      "swiftTypeName": "WidgetsCapabilitiesGroup",
+      "name": "Возможности виджетов",
+      "description": "Функциональные ключи раздела мини-приложений.",
+      "keys": ["widgets.welcome_course"]
+    },
+    {
+      "groupID": "smg_account_config",
+      "swiftTypeName": "SmgAccountConfigGroup",
+      "name": "SMG Account Config",
+      "description": "Флаги, управляемые конфигурацией SMG сервера (migration layer).",
+      "keys": [
+        "smg.new_design",
+        "smg.dnd_mode",
+        "smg.call_forwarding",
+        "smg.elph_api",
+        "smg.call_api",
+        "smg.auto_attendant",
+        "smg.call_backend",
+        "smg.oidc_offline_scope"
+      ]
+    },
+    {
+      "groupID": "debug_flags",
+      "swiftTypeName": "DebugFlagsGroup",
+      "name": "Debug flags",
+      "description": "Внутренние флаги только для разработки.",
+      "keys": [
+        "debug.conference_details_mock",
+        "debug.background_update_time",
+        "debug.invite_income_end_time",
+        "debug.call_end_time"
+      ]
+    },
+    {
+      "groupID": "local_flags",
+      "swiftTypeName": "LocalFlagsGroup",
+      "name": "Local-only flags",
+      "description": "Клиентские флаги, не управляемые сервером (ex-FeatureFlags.shared).",
+      "keys": [
+        "local.mattermost_migration_fix",
+        "local.thread_room_drafts",
+        "local.sip_transport_override"
+      ]
     }
   ]
 }
