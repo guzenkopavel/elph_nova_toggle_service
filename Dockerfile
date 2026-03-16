@@ -30,13 +30,10 @@ RUN npm ci --omit=dev && npm cache clean --force
 # Compiled application (includes dist/src/views from postbuild)
 COPY --from=builder /app/dist ./dist
 
-# Migration TypeScript sources — tsx runs these directly at startup
+# TypeScript sources — tsx runs migrations and scripts directly at runtime.
 # (avoids knex/Node ESM-detection issues with compiled .js migration files)
 COPY knexfile.ts ./knexfile.ts
-COPY src/db/migrate.ts ./src/db/migrate.ts
-COPY src/db/migrations ./src/db/migrations
-
-# Operational scripts (sync-manifest, etc.) — tsx runs these directly
+COPY src ./src
 COPY scripts ./scripts
 
 # Manifest — default baked-in copy; override with a volume mount in compose
