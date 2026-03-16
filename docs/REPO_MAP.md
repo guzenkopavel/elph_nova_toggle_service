@@ -200,6 +200,13 @@ Excluded from indexing by default:
 - `src/modules/manifest/sync.ts`
   - `ManifestSyncService`: fully transactional `sync()` upserts active definitions and archives removed keys; `driftReadyCheck()` verifies DB hash matches loaded manifest hash at startup
 
+## `src/modules/dependencies`
+
+- `src/modules/dependencies/repository.ts`
+  - `DependenciesRepository` interface and `DefaultDependenciesRepository`; CRUD over the `flag_dependencies` table: `add`, `remove`, `findById`, `listByProduct`, `findEdge`
+- `src/modules/dependencies/cycle.ts`
+  - `wouldCreateCycle(edges, parentKey, childKey)`: pure function that builds an adjacency map from existing edges and runs a DFS to detect whether adding the proposed edge would introduce a cycle
+
 ## `src/modules/config-resolution`
 
 - `src/modules/config-resolution/types.ts`

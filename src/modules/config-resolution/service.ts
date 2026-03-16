@@ -1,6 +1,7 @@
 import type { DefinitionRow, DefinitionsRepository } from '../definitions/repository'
 import type { RuleRow, RulesRepository } from '../rules/repository'
 import type { ProductRow, ProductsRepository } from '../products/repository'
+import type { DependenciesRepository } from '../dependencies/repository'
 import type { CompiledSnapshot, RequestContext, ResolvedEntry } from './types'
 import { selectBestRule } from './specificity'
 
@@ -15,6 +16,7 @@ interface ParsedSnapshot {
   ttlSeconds: number
   parsedDefaults: Map<string, ResolvedEntry>
   parsedRules: ParsedRuleRow[]
+  parsedEdges: Array<{ parent_feature_key: string; child_feature_key: string }>
 }
 
 export class ConfigResolutionService {
@@ -26,6 +28,7 @@ export class ConfigResolutionService {
     private readonly productsRepo: ProductsRepository,
     private readonly definitionsRepo: DefinitionsRepository,
     private readonly rulesRepo: RulesRepository,
+    private readonly depsRepo?: DependenciesRepository,
   ) {}
 
   private cacheKey(productId: number, revision: number): string {
@@ -53,11 +56,12 @@ export class ConfigResolutionService {
     return promise
   }
 
-  // Loads definitions and rules from DB and parses all JSON once.
+  // Loads definitions, rules, and dependency edges from DB and parses all JSON once.
   private async _loadParsedSnapshot(product: ProductRow): Promise<ParsedSnapshot> {
-    const [definitions, rules] = await Promise.all([
+    const [definitions, rules, edges] = await Promise.all([
       this.definitionsRepo.listActive(product.id),
       this.rulesRepo.listAllActive(product.id),
+      this.depsRepo ? this.depsRepo.listByProduct(product.id) : Promise.resolve([]),
     ])
 
     const parsedDefaults = new Map<string, ResolvedEntry>()
@@ -71,12 +75,18 @@ export class ConfigResolutionService {
       parsedEntry: Object.freeze(parseEntryJson(rule.entry_json, rule.feature_key)),
     }))
 
+    const parsedEdges = edges.map(e => ({
+      parent_feature_key: e.parent_feature_key,
+      child_feature_key: e.child_feature_key,
+    }))
+
     return {
       productId: product.id,
       revision: product.current_revision,
       ttlSeconds: product.ttl_seconds,
       parsedDefaults,
       parsedRules,
+      parsedEdges,
     }
   }
 
@@ -93,11 +103,13 @@ export class ConfigResolutionService {
       features[featureKey] = bestRule ? bestRule.parsedEntry : defaultEntry
     }
 
+    const propagated = applyDependencyPropagation(features, parsed.parsedEdges)
+
     return {
       productId: parsed.productId,
       revision: parsed.revision,
       ttl: parsed.ttlSeconds,
-      features,
+      features: propagated,
     }
   }
 
@@ -128,4 +140,59 @@ function parseEntryJson(json: string, featureKey: string): ResolvedEntry {
   } catch (err) {
     throw new Error(`ConfigResolutionService: failed to parse entry_json for '${featureKey}': ${String(err)}`)
   }
+}
+
+function applyDependencyPropagation(
+  features: Record<string, ResolvedEntry>,
+  edges: Array<{ parent_feature_key: string; child_feature_key: string }>,
+): Record<string, ResolvedEntry> {
+  if (edges.length === 0) return features
+
+  // Build adjacency: parent → children (only for keys present in features)
+  const childrenOf = new Map<string, string[]>()
+  const inDegree = new Map<string, number>()
+
+  for (const key of Object.keys(features)) {
+    inDegree.set(key, 0)
+  }
+
+  for (const edge of edges) {
+    const { parent_feature_key: parent, child_feature_key: child } = edge
+    if (!(parent in features) || !(child in features)) continue
+    if (!childrenOf.has(parent)) childrenOf.set(parent, [])
+    childrenOf.get(parent)!.push(child)
+    inDegree.set(child, (inDegree.get(child) ?? 0) + 1)
+  }
+
+  // Kahn's topological sort — process parents before children
+  const queue: string[] = []
+  for (const [key, deg] of inDegree) {
+    if (deg === 0) queue.push(key)
+  }
+
+  const result: Record<string, ResolvedEntry> = { ...features }
+  const processed = new Set<string>()
+
+  while (queue.length > 0) {
+    const key = queue.shift()!
+    processed.add(key)
+
+    for (const child of childrenOf.get(key) ?? []) {
+      // AND semantics: if parent disabled, child becomes disabled
+      if ((result[key] as { isEnabled?: boolean }).isEnabled === false) {
+        result[child] = { ...result[child], isEnabled: false }
+      }
+      const newDeg = (inDegree.get(child) ?? 1) - 1
+      inDegree.set(child, newDeg)
+      if (newDeg === 0) queue.push(child)
+    }
+  }
+
+  // Safety net: log cycle nodes, skip propagation for them (don't crash)
+  const cycleNodes = [...inDegree.keys()].filter(k => !processed.has(k) && (inDegree.get(k) ?? 0) > 0)
+  if (cycleNodes.length > 0) {
+    console.warn('[ConfigResolutionService] cycle detected in flag dependencies, skipping:', cycleNodes)
+  }
+
+  return result
 }

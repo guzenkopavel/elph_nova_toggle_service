@@ -170,4 +170,95 @@ test.describe('Admin UI E2E', () => {
     }, 'http://127.0.0.1:3099')
     expect(response).toBe(403)
   })
+
+  // ─── Dependency Tree E2E ────────────────────────────────────────────────────
+
+  // E2E-DEP-1: Features list shows Dependencies column
+  test('E2E-DEP-1: features list shows Dependencies column', async ({ page }) => {
+    await page.goto('/admin/features')
+    await expect(page.locator('table thead')).toContainText('Dependencies')
+  })
+
+  // E2E-DEP-2: Feature detail page shows Dependencies section
+  test('E2E-DEP-2: feature detail shows Dependencies section', async ({ page }) => {
+    await page.goto('/admin/features/chat')
+    const bodyText = await page.locator('body').textContent() ?? ''
+    expect(bodyText).toContain('Dependencies')
+    expect(bodyText).toContain('Add Dependency')
+  })
+
+  // E2E-DEP-3: Add dependency form works — adds edge and redirects, edge visible
+  test('E2E-DEP-3: add dependency form creates edge', async ({ page }) => {
+    // Navigate to 'premium' detail page and add video_call as its parent
+    await page.goto('/admin/features/premium')
+
+    // Select direction = "premium depends on (parent): video_call"
+    await page.selectOption('select[name="direction"]', 'child')
+    await page.fill('input[name="other_key"]', 'video_call')
+    await page.fill('input[name="reason"]', 'E2E dep test')
+
+    await page.click('button[type="submit"]')
+
+    // Should redirect back to premium detail
+    await expect(page).toHaveURL(/\/admin\/features\/premium$/)
+
+    // Parent edge should now appear
+    const bodyText = await page.locator('body').textContent() ?? ''
+    expect(bodyText).toContain('video_call')
+  })
+
+  // E2E-DEP-4: Remove dependency form works — removes edge and redirects
+  test('E2E-DEP-4: remove dependency form deletes edge', async ({ page }) => {
+    // First add a dependency via HTTP API (using fetch within page context)
+    // Navigate to get CSRF token and current state
+    await page.goto('/admin/features/chat')
+
+    // Add a dependency first using the form
+    await page.selectOption('select[name="direction"]', 'parent')
+    await page.fill('input[name="other_key"]', 'premium')
+    await page.fill('input[name="reason"]', 'E2E remove test')
+    await page.click('button[type="submit"]')
+    await expect(page).toHaveURL(/\/admin\/features\/chat$/)
+
+    // Now find and click the Remove button for the child edge
+    // The child section shows edges where chat is the parent
+    const removeForm = page.locator('form[action*="/dependencies/"][action*="/remove"]').first()
+    await expect(removeForm).toBeVisible()
+
+    await removeForm.locator('button[type="submit"]').click()
+
+    // Should redirect back to chat detail
+    await expect(page).toHaveURL(/\/admin\/features\/chat$/)
+
+    // premium should no longer appear as a child
+    const bodyText = await page.locator('body').textContent() ?? ''
+    // The child edges section should now show 'No child dependencies.'
+    // (premium may still appear elsewhere in the page, but the child table entry is gone)
+    expect(bodyText).toContain('No child dependencies')
+  })
+
+  // E2E-DEP-5: Cycle detection — adding a cycle shows error on the form page
+  test('E2E-DEP-5: adding cyclic dependency shows error', async ({ page }) => {
+    // First ensure A→B exists: video_call depends on chat (video_call is child, chat is parent)
+    await page.goto('/admin/features/video_call')
+    await page.selectOption('select[name="direction"]', 'child')
+    await page.fill('input[name="other_key"]', 'chat')
+    await page.fill('input[name="reason"]', 'E2E cycle setup')
+    await page.click('button[type="submit"]')
+    await expect(page).toHaveURL(/\/admin\/features\/video_call$/)
+
+    // Now try to add chat depends on video_call (would create cycle: chat→video_call→chat)
+    await page.goto('/admin/features/chat')
+    await page.selectOption('select[name="direction"]', 'child')
+    await page.fill('input[name="other_key"]', 'video_call')
+    await page.fill('input[name="reason"]', 'E2E cycle attempt')
+    await page.click('button[type="submit"]')
+
+    // Should stay on chat detail page with an error
+    await expect(page).toHaveURL(/\/admin\/features\/chat$/)
+    const errorEl = page.locator('.error')
+    await expect(errorEl).toBeVisible()
+    const errorText = await errorEl.textContent() ?? ''
+    expect(errorText.toLowerCase()).toMatch(/cycle|circular/)
+  })
 })

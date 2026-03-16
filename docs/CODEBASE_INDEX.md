@@ -155,6 +155,18 @@ Integration tests for `ManifestSyncService` against in-memory SQLite: `sync()` u
 
 `RulesRepository` interface and `DefaultRulesRepository`. Existing methods: `create`, `update`, `disable`, `findById`, `listActiveByKey`. Added in Task 6: `listAllActive(productId, trx?)` — returns all active rules for a product across all feature keys, ordered by id ascending. Used by `ConfigResolutionService._loadParsedSnapshot` to load rules in a single query.
 
+### `src/modules/dependencies/repository.ts`
+
+`DependenciesRepository` interface and `DefaultDependenciesRepository`. Interface methods: `add(dep, trx?)`, `remove(id, trx?)`, `findById(id)`, `listByProduct(productId)`, `findEdge(productId, parentKey, childKey)`. `DefaultDependenciesRepository` implements all methods over the `flag_dependencies` table using Knex. Used by `AdminRulesService` for dependency add/remove flows.
+
+### `src/modules/dependencies/cycle.ts`
+
+`wouldCreateCycle(edges, parentKey, childKey)`: pure stateless function. Builds an adjacency map from the provided edge list and runs a DFS starting from `childKey` to detect whether there is already a path back to `parentKey`. Returns `true` if adding the edge would create a cycle, `false` otherwise. No DB access; called before the transactional insert in `AdminRulesService.addDependency`.
+
+### `src/db/migrations/005_create_flag_dependencies.ts`
+
+Migration that creates the `flag_dependencies` table: `id` (auto-increment primary key), `product_id` (FK to `products`), `parent_feature_key`, `child_feature_key`, `reason` (nullable text), `created_at` timestamp. Unique constraint on `(product_id, parent_feature_key, child_feature_key)` prevents duplicate edges and serves as the PostgreSQL safety net against concurrent duplicate inserts.
+
 ### `src/modules/config-resolution`
 
 Implemented in Task 6. Three files:

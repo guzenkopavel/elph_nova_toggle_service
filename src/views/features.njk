@@ -10,6 +10,7 @@
       <th>Key</th>
       <th>Name</th>
       <th>Active Rules</th>
+      <th>Dependencies</th>
       <th>Actions</th>
     </tr>
   </thead>
@@ -19,10 +20,11 @@
       <td><a href="/admin/features/{{ feature.feature_key }}">{{ feature.feature_key }}</a></td>
       <td>{{ feature.name }}</td>
       <td>{{ feature.activeRuleCount }}</td>
+      <td>{{ feature.depCount }}</td>
       <td><a href="/admin/features/{{ feature.feature_key }}">View</a></td>
     </tr>
     {% else %}
-    <tr><td colspan="4">No features in manifest registry.</td></tr>
+    <tr><td colspan="5">No features in manifest registry.</td></tr>
     {% endfor %}
   </tbody>
 </table>

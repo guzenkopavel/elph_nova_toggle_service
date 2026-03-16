@@ -890,6 +890,24 @@ Source of truth:
 
 ---
 
+## Post-Stage-1 Implemented Features
+
+### Flag Dependency Tree (implemented after Task 12)
+
+Added after stage-1 handoff. Allows operators to declare a directed dependency edge between two remote-capable feature keys within a product, ensuring that a parent feature is considered by the resolution logic before a child feature's rules are applied.
+
+Implementation scope:
+
+- `src/db/migrations/005_create_flag_dependencies.ts` — `flag_dependencies` table with unique constraint on `(product_id, parent_feature_key, child_feature_key)`.
+- `src/modules/dependencies/repository.ts` — `DependenciesRepository` interface and `DefaultDependenciesRepository`.
+- `src/modules/dependencies/cycle.ts` — `wouldCreateCycle` pure function (DFS cycle detection).
+- `AdminRulesService` extended: `addDependency`, `removeDependency`, `listDependencies` methods; optional `DependenciesRepository` constructor parameter.
+- Admin UI routes and templates extended with dependency management pages.
+
+Status: **implemented and tested**.
+
+---
+
 ## 4. Definition of Done для server implementation plan
 
 - [ ] Все задачи stage-1 реализованы или явно перенесены

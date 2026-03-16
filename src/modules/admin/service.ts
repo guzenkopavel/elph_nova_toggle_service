@@ -7,6 +7,8 @@ import type { DefaultRevisionsRepository, RevisionRow } from '../revisions/repos
 import type { ConfigResolutionService } from '../config-resolution/service.js'
 import type { CompiledSnapshot, RequestContext } from '../config-resolution/types.js'
 import { detectAmbiguousOverlap } from '../config-resolution/specificity.js'
+import type { DependenciesRepository, DependencyRow } from '../dependencies/repository.js'
+import { wouldCreateCycle } from '../dependencies/cycle.js'
 
 export class ValidationError extends Error {
   constructor(message: string) {
@@ -63,6 +65,22 @@ export interface DisableRuleInput {
   changedBy?: string
 }
 
+export interface AddDependencyInput {
+  productId: number
+  parentKey: string
+  childKey: string
+  reason?: string
+  expectedRevision: number
+  changedBy?: string
+}
+
+export interface RemoveDependencyInput {
+  productId: number
+  depId: number
+  expectedRevision: number
+  changedBy?: string
+}
+
 export class AdminRulesService {
   constructor(
     private readonly db: Knex,
@@ -71,6 +89,7 @@ export class AdminRulesService {
     private readonly productsRepo: DefaultProductsRepository,
     private readonly revisionsRepo: DefaultRevisionsRepository,
     private readonly resolutionService: ConfigResolutionService,
+    private readonly depsRepo?: DependenciesRepository,
   ) {}
 
   async createRule(input: CreateRuleInput): Promise<RuleRow> {
@@ -287,6 +306,126 @@ export class AdminRulesService {
 
   async listRevisions(productId: number, limit: number): Promise<RevisionRow[]> {
     return await this.revisionsRepo.listByProduct(productId, limit)
+  }
+
+  async addDependency(input: AddDependencyInput): Promise<DependencyRow> {
+    if (!this.depsRepo) throw new Error('DependenciesRepository not configured')
+
+    if (!this.registry.hasKey(input.parentKey)) {
+      throw new ValidationError(`Feature key '${input.parentKey}' is not in the manifest registry`)
+    }
+    if (!this.registry.hasKey(input.childKey)) {
+      throw new ValidationError(`Feature key '${input.childKey}' is not in the manifest registry`)
+    }
+    if (input.parentKey === input.childKey) {
+      throw new ValidationError('A feature cannot depend on itself')
+    }
+
+    const existing = await this.depsRepo.findEdge(input.productId, input.parentKey, input.childKey)
+    if (existing) {
+      throw new ValidationError('Dependency already exists')
+    }
+
+    // Note: cycle and duplicate checks are non-transactional reads followed by a transactional write.
+    // Under SQLite writes serialize so TOCTOU is not possible. Under PostgreSQL the unique constraint
+    // on (product_id, parent_key, child_key) prevents duplicate edges. Cycle TOCTOU has a tiny
+    // window; the resolution-time safety-net (Kahn's algo with cycle logging) prevents silent corruption.
+    const allEdges = await this.depsRepo.listByProduct(input.productId)
+    if (wouldCreateCycle(allEdges, input.parentKey, input.childKey)) {
+      throw new ValidationError('Adding this dependency would create a cycle')
+    }
+
+    // Read product outside the transaction to avoid SQLite deadlock (single connection).
+    const product = await this.productsRepo.findById(input.productId)
+    if (!product) throw new NotFoundError(`Product ${input.productId} not found`)
+
+    let createdDep!: DependencyRow
+    await withTransaction(this.db, async (trx) => {
+      createdDep = await this.depsRepo!.add({
+        product_id: input.productId,
+        parent_feature_key: input.parentKey,
+        child_feature_key: input.childKey,
+        reason: input.reason ?? null,
+      }, trx)
+
+      const newRevision = product.current_revision + 1
+      try {
+        await this.productsRepo.updateRevision(input.productId, newRevision, input.expectedRevision, trx)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (!msg.includes('Revision conflict')) {
+          console.error('[AdminRulesService] unexpected updateRevision error:', err)
+        }
+        throw new ConflictError(`Revision conflict: expected ${input.expectedRevision}`)
+      }
+
+      await this.revisionsRepo.insert({
+        product_id: input.productId,
+        revision: newRevision,
+        change_type: 'dependency_added',
+        feature_key: input.parentKey,
+        rule_id: null,
+        old_value_json: null,
+        new_value_json: JSON.stringify({ parent: input.parentKey, child: input.childKey }),
+        reason: input.reason ?? '',
+        changed_by: input.changedBy ?? 'unknown',
+        request_id: null,
+      }, trx)
+    })
+
+    // invalidateCache must run synchronously after the transaction commits.
+    this.resolutionService.invalidateCache(input.productId)
+    return createdDep
+  }
+
+  async removeDependency(input: RemoveDependencyInput): Promise<void> {
+    if (!this.depsRepo) throw new Error('DependenciesRepository not configured')
+
+    const dep = await this.depsRepo.findById(input.depId)
+    if (!dep || dep.product_id !== input.productId) {
+      throw new NotFoundError(`Dependency ${input.depId} not found`)
+    }
+
+    // Read product outside the transaction to avoid SQLite deadlock (single connection).
+    const product = await this.productsRepo.findById(input.productId)
+    if (!product) throw new NotFoundError(`Product ${input.productId} not found`)
+
+    await withTransaction(this.db, async (trx) => {
+      await this.depsRepo!.remove(input.depId, trx)
+
+      const newRevision = product.current_revision + 1
+      try {
+        await this.productsRepo.updateRevision(input.productId, newRevision, input.expectedRevision, trx)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (!msg.includes('Revision conflict')) {
+          console.error('[AdminRulesService] unexpected updateRevision error:', err)
+        }
+        throw new ConflictError(`Revision conflict: expected ${input.expectedRevision}`)
+      }
+
+      const edgeJson = JSON.stringify({ parent: dep.parent_feature_key, child: dep.child_feature_key })
+      await this.revisionsRepo.insert({
+        product_id: input.productId,
+        revision: newRevision,
+        change_type: 'dependency_removed',
+        feature_key: dep.parent_feature_key,
+        rule_id: null,
+        old_value_json: edgeJson,
+        new_value_json: edgeJson,
+        reason: '',
+        changed_by: input.changedBy ?? 'unknown',
+        request_id: null,
+      }, trx)
+    })
+
+    // invalidateCache must run synchronously after the transaction commits.
+    this.resolutionService.invalidateCache(input.productId)
+  }
+
+  async listDependencies(productId: number): Promise<DependencyRow[]> {
+    if (!this.depsRepo) return []
+    return this.depsRepo.listByProduct(productId)
   }
 
   private validateEntryJson(featureKey: string, entryJson: Record<string, unknown>): void {

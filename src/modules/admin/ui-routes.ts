@@ -77,15 +77,23 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
   }, async (_request, reply) => {
     const allDefs = registry.getAll()
     const allRules = await service.listRules(productId)
+    const allDeps = await service.listDependencies(productId)
 
     const ruleCountByKey = new Map<string, number>()
     for (const rule of allRules) {
       ruleCountByKey.set(rule.feature_key, (ruleCountByKey.get(rule.feature_key) ?? 0) + 1)
     }
 
+    const depCountByKey = new Map<string, number>()
+    for (const dep of allDeps) {
+      depCountByKey.set(dep.parent_feature_key, (depCountByKey.get(dep.parent_feature_key) ?? 0) + 1)
+      depCountByKey.set(dep.child_feature_key, (depCountByKey.get(dep.child_feature_key) ?? 0) + 1)
+    }
+
     const features = allDefs.map((def) => ({
       ...def,
       activeRuleCount: ruleCountByKey.get(def.feature_key) ?? 0,
+      depCount: depCountByKey.get(def.feature_key) ?? 0,
     }))
 
     const html = await reply.viewAsync('features.njk', { features })
@@ -110,6 +118,9 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
     const rules = allRules.filter((r) => r.feature_key === key)
     const currentRevision = await service.getCurrentRevision(productId)
     const csrfToken = reply.generateCsrf()
+    const allDeps = await service.listDependencies(productId)
+    const parentEdges = allDeps.filter(d => d.child_feature_key === key)
+    const childEdges = allDeps.filter(d => d.parent_feature_key === key)
 
     const html = await reply.viewAsync('feature.njk', {
       featureKey: key,
@@ -117,6 +128,8 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
       rules,
       currentRevision,
       csrfToken,
+      parentEdges,
+      childEdges,
     })
     return reply.send(html)
   })
@@ -401,12 +414,15 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
         const rules = allRules.filter((r) => r.feature_key === key)
         const csrfToken = reply.generateCsrf()
         const definition = registry.getByKey(key)
+        const allDepsForDisable = await service.listDependencies(productId)
         const html = await reply.viewAsync('feature.njk', {
           featureKey: key,
           definition,
           rules,
           currentRevision,
           csrfToken,
+          parentEdges: allDepsForDisable.filter(d => d.child_feature_key === key),
+          childEdges: allDepsForDisable.filter(d => d.parent_feature_key === key),
           errorMessage: err.message,
         })
         return reply.code(200).send(html)
@@ -435,12 +451,15 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
       const rules = allRules.filter((r) => r.feature_key === key)
       const csrfToken = reply.generateCsrf()
       const definition = registry.getByKey(key)
+      const allDepsForToggle = await service.listDependencies(productId)
       const html = await reply.viewAsync('feature.njk', {
         featureKey: key,
         definition,
         rules,
         currentRevision,
         csrfToken,
+        parentEdges: allDepsForToggle.filter(d => d.child_feature_key === key),
+        childEdges: allDepsForToggle.filter(d => d.parent_feature_key === key),
         errorMessage: message,
       })
       return reply.code(200).send(html)
@@ -488,6 +507,123 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
         }
         throw err
       }
+    }
+
+    return reply.redirect(`/admin/features/${key}`)
+  })
+
+  // ─── POST /admin/features/:key/dependencies/add ────────────────────────────
+
+  fastify.post<{ Params: { key: string }; Body: Record<string, string> }>('/admin/features/:key/dependencies/add', {
+    preHandler: [editorHtmlHook, fastify.csrfProtection],
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
+  }, async (request, reply) => {
+    const { key } = request.params
+    const body = request.body ?? {}
+    const direction = body['direction']
+    const otherKey = (body['other_key'] ?? '').trim()
+    const reason = (body['reason'] ?? '').trim() || undefined
+    const expectedRevision = parseInt(body['expected_revision'] ?? '0', 10)
+
+    const parentKey = direction === 'child' ? otherKey : key
+    const childKey = direction === 'child' ? key : otherKey
+
+    const renderDepError = async (message: string) => {
+      const definition = registry.getByKey(key)
+      const allRules = await service.listRules(productId)
+      const rules = allRules.filter((r) => r.feature_key === key)
+      const currentRevision = await service.getCurrentRevision(productId)
+      const csrfToken = reply.generateCsrf()
+      const allDeps = await service.listDependencies(productId)
+      const parentEdges = allDeps.filter(d => d.child_feature_key === key)
+      const childEdges = allDeps.filter(d => d.parent_feature_key === key)
+      const html = await reply.viewAsync('feature.njk', {
+        featureKey: key,
+        definition,
+        rules,
+        currentRevision,
+        csrfToken,
+        parentEdges,
+        childEdges,
+        depErrorMessage: message,
+      })
+      return reply.code(200).send(html)
+    }
+
+    if (!otherKey) {
+      return renderDepError('feature_key is required')
+    }
+
+    try {
+      await service.addDependency({
+        productId,
+        parentKey,
+        childKey,
+        reason,
+        expectedRevision,
+        changedBy: request.adminSub ?? 'unknown',
+      })
+    } catch (err) {
+      if (err instanceof ValidationError || err instanceof ConflictError || err instanceof NotFoundError) {
+        return renderDepError(err.message)
+      }
+      throw err
+    }
+
+    return reply.redirect(`/admin/features/${key}`)
+  })
+
+  // ─── POST /admin/features/:key/dependencies/:depId/remove ──────────────────
+
+  fastify.post<{ Params: { key: string; depId: string }; Body: Record<string, string> }>('/admin/features/:key/dependencies/:depId/remove', {
+    preHandler: [editorHtmlHook, fastify.csrfProtection],
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
+  }, async (request, reply) => {
+    const { key, depId: depIdStr } = request.params
+    const depId = parseInt(depIdStr, 10)
+    if (isNaN(depId)) {
+      return reply.type('text/html').code(400).send(
+        `<!DOCTYPE html><html><body><h1>400</h1><p>Invalid dependency id.</p><a href="/admin/features/${escapeHtml(key)}">Back</a></body></html>`
+      )
+    }
+
+    const body = request.body ?? {}
+    const expectedRevision = parseInt(body['expected_revision'] ?? '0', 10)
+
+    const renderDepError = async (message: string) => {
+      const definition = registry.getByKey(key)
+      const allRules = await service.listRules(productId)
+      const rules = allRules.filter((r) => r.feature_key === key)
+      const currentRevision = await service.getCurrentRevision(productId)
+      const csrfToken = reply.generateCsrf()
+      const allDeps = await service.listDependencies(productId)
+      const parentEdges = allDeps.filter(d => d.child_feature_key === key)
+      const childEdges = allDeps.filter(d => d.parent_feature_key === key)
+      const html = await reply.viewAsync('feature.njk', {
+        featureKey: key,
+        definition,
+        rules,
+        currentRevision,
+        csrfToken,
+        parentEdges,
+        childEdges,
+        depErrorMessage: message,
+      })
+      return reply.code(200).send(html)
+    }
+
+    try {
+      await service.removeDependency({
+        productId,
+        depId,
+        expectedRevision,
+        changedBy: request.adminSub ?? 'unknown',
+      })
+    } catch (err) {
+      if (err instanceof ConflictError || err instanceof ValidationError || err instanceof NotFoundError) {
+        return renderDepError(err.message)
+      }
+      throw err
     }
 
     return reply.redirect(`/admin/features/${key}`)

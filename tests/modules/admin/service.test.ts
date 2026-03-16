@@ -3,6 +3,7 @@ import { AdminRulesService, ValidationError, ConflictError, NotFoundError } from
 import type { RuleRow } from '../../../src/modules/rules/repository'
 import type { ProductRow } from '../../../src/modules/products/repository'
 import type { ManifestDefinition } from '../../../src/modules/manifest/registry'
+import type { DependencyRow } from '../../../src/modules/dependencies/repository'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -317,6 +318,220 @@ describe('AdminRulesService', () => {
 
     expect(rulesRepo.disable).toHaveBeenCalledWith(1, 'unknown', expect.anything())
     expect(resolutionService.invalidateCache).toHaveBeenCalledWith(10)
+  })
+
+  // ─── Dependency methods ───────────────────────────────────────────────────
+
+  function makeDep(overrides: Partial<DependencyRow> = {}): DependencyRow {
+    return {
+      id: 1,
+      product_id: 10,
+      parent_feature_key: 'chat',
+      child_feature_key: 'video_call',
+      reason: null,
+      created_at: '2026-01-01T00:00:00.000Z',
+      ...overrides,
+    }
+  }
+
+  function makeDepsRepo(overrides: Record<string, unknown> = {}) {
+    return {
+      add: vi.fn().mockResolvedValue(makeDep()),
+      remove: vi.fn().mockResolvedValue(undefined),
+      findById: vi.fn().mockResolvedValue(undefined),
+      findEdge: vi.fn().mockResolvedValue(undefined),
+      listByProduct: vi.fn().mockResolvedValue([]),
+      ...overrides,
+    }
+  }
+
+  it('D1: addDependency creates edge and bumps revision', async () => {
+    const registry = makeRegistry(true)
+    const rulesRepo = makeRulesRepo()
+    const productsRepo = makeProductsRepo()
+    const revisionsRepo = makeRevisionsRepo()
+    const resolutionService = makeResolutionService()
+    const depsRepo = makeDepsRepo()
+
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any, depsRepo as any)
+
+    const result = await service.addDependency({
+      productId: 10,
+      parentKey: 'chat',
+      childKey: 'video_call',
+      expectedRevision: 0,
+    })
+
+    expect(depsRepo.add).toHaveBeenCalled()
+    expect(revisionsRepo.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ change_type: 'dependency_added' }),
+      expect.anything(),
+    )
+    expect(resolutionService.invalidateCache).toHaveBeenCalledWith(10)
+    expect(result.parent_feature_key).toBe('chat')
+  })
+
+  it('D2: addDependency ValidationError on unknown parent key', async () => {
+    const registry = makeRegistry(false)
+    const rulesRepo = makeRulesRepo()
+    const productsRepo = makeProductsRepo()
+    const revisionsRepo = makeRevisionsRepo()
+    const resolutionService = makeResolutionService()
+    const depsRepo = makeDepsRepo()
+
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any, depsRepo as any)
+
+    await expect(service.addDependency({
+      productId: 10,
+      parentKey: 'unknown',
+      childKey: 'video_call',
+      expectedRevision: 0,
+    })).rejects.toThrow(ValidationError)
+  })
+
+  it('D3: addDependency ValidationError on self-dependency', async () => {
+    const registry = makeRegistry(true)
+    const rulesRepo = makeRulesRepo()
+    const productsRepo = makeProductsRepo()
+    const revisionsRepo = makeRevisionsRepo()
+    const resolutionService = makeResolutionService()
+    const depsRepo = makeDepsRepo()
+
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any, depsRepo as any)
+
+    await expect(service.addDependency({
+      productId: 10,
+      parentKey: 'chat',
+      childKey: 'chat',
+      expectedRevision: 0,
+    })).rejects.toThrow(ValidationError)
+  })
+
+  it('D4: addDependency ValidationError on duplicate edge', async () => {
+    const registry = makeRegistry(true)
+    const rulesRepo = makeRulesRepo()
+    const productsRepo = makeProductsRepo()
+    const revisionsRepo = makeRevisionsRepo()
+    const resolutionService = makeResolutionService()
+    const depsRepo = makeDepsRepo({
+      findEdge: vi.fn().mockResolvedValue(makeDep()),
+    })
+
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any, depsRepo as any)
+
+    await expect(service.addDependency({
+      productId: 10,
+      parentKey: 'chat',
+      childKey: 'video_call',
+      expectedRevision: 0,
+    })).rejects.toThrow(ValidationError)
+  })
+
+  it('D5: addDependency ValidationError on cycle', async () => {
+    const registry = makeRegistry(true)
+    const rulesRepo = makeRulesRepo()
+    const productsRepo = makeProductsRepo()
+    const revisionsRepo = makeRevisionsRepo()
+    const resolutionService = makeResolutionService()
+    // Existing edge: video_call → chat; proposing chat → video_call creates cycle
+    const depsRepo = makeDepsRepo({
+      listByProduct: vi.fn().mockResolvedValue([
+        makeDep({ parent_feature_key: 'video_call', child_feature_key: 'chat' }),
+      ]),
+    })
+
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any, depsRepo as any)
+
+    await expect(service.addDependency({
+      productId: 10,
+      parentKey: 'chat',
+      childKey: 'video_call',
+      expectedRevision: 0,
+    })).rejects.toThrow(ValidationError)
+  })
+
+  it('D6: removeDependency removes edge and bumps revision', async () => {
+    const registry = makeRegistry(true)
+    const rulesRepo = makeRulesRepo()
+    const productsRepo = makeProductsRepo()
+    const revisionsRepo = makeRevisionsRepo()
+    const resolutionService = makeResolutionService()
+    const depsRepo = makeDepsRepo({
+      findById: vi.fn().mockResolvedValue(makeDep({ id: 5 })),
+    })
+
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any, depsRepo as any)
+
+    await service.removeDependency({ productId: 10, depId: 5, expectedRevision: 0 })
+
+    expect(depsRepo.remove).toHaveBeenCalledWith(5, expect.anything())
+    expect(revisionsRepo.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ change_type: 'dependency_removed' }),
+      expect.anything(),
+    )
+    expect(resolutionService.invalidateCache).toHaveBeenCalledWith(10)
+  })
+
+  it('D7: removeDependency NotFoundError on missing dep', async () => {
+    const registry = makeRegistry(true)
+    const rulesRepo = makeRulesRepo()
+    const productsRepo = makeProductsRepo()
+    const revisionsRepo = makeRevisionsRepo()
+    const resolutionService = makeResolutionService()
+    const depsRepo = makeDepsRepo({
+      findById: vi.fn().mockResolvedValue(undefined),
+    })
+
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any, depsRepo as any)
+
+    await expect(service.removeDependency({ productId: 10, depId: 999, expectedRevision: 0 })).rejects.toThrow(NotFoundError)
+  })
+
+  it('D8: removeDependency NotFoundError when dep belongs to different product', async () => {
+    const registry = makeRegistry(true)
+    const rulesRepo = makeRulesRepo()
+    const productsRepo = makeProductsRepo()
+    const revisionsRepo = makeRevisionsRepo()
+    const resolutionService = makeResolutionService()
+    const depsRepo = makeDepsRepo({
+      findById: vi.fn().mockResolvedValue(makeDep({ product_id: 999 })),
+    })
+
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any, depsRepo as any)
+
+    await expect(service.removeDependency({ productId: 10, depId: 1, expectedRevision: 0 })).rejects.toThrow(NotFoundError)
+  })
+
+  it('D9: listDependencies returns all edges', async () => {
+    const registry = makeRegistry(true)
+    const rulesRepo = makeRulesRepo()
+    const productsRepo = makeProductsRepo()
+    const revisionsRepo = makeRevisionsRepo()
+    const resolutionService = makeResolutionService()
+    const deps = [makeDep(), makeDep({ id: 2, child_feature_key: 'premium' })]
+    const depsRepo = makeDepsRepo({
+      listByProduct: vi.fn().mockResolvedValue(deps),
+    })
+
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any, depsRepo as any)
+
+    const result = await service.listDependencies(10)
+    expect(result).toHaveLength(2)
+    expect(depsRepo.listByProduct).toHaveBeenCalledWith(10)
+  })
+
+  it('D10: listDependencies returns [] when depsRepo not provided', async () => {
+    const registry = makeRegistry(true)
+    const rulesRepo = makeRulesRepo()
+    const productsRepo = makeProductsRepo()
+    const revisionsRepo = makeRevisionsRepo()
+    const resolutionService = makeResolutionService()
+
+    // No depsRepo passed
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any)
+
+    const result = await service.listDependencies(10)
+    expect(result).toEqual([])
   })
 
   // U10: validateEntryJson rejects unknown fields when payload schema has fields

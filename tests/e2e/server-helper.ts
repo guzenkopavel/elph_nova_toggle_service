@@ -7,6 +7,7 @@ import { DefaultProductsRepository } from '../../src/modules/products/repository
 import { DefaultDefinitionsRepository } from '../../src/modules/definitions/repository'
 import { DefaultRulesRepository } from '../../src/modules/rules/repository'
 import { DefaultRevisionsRepository } from '../../src/modules/revisions/repository'
+import { DefaultDependenciesRepository } from '../../src/modules/dependencies/repository'
 import { ConfigResolutionService } from '../../src/modules/config-resolution/service'
 import { ManifestRegistry } from '../../src/modules/manifest/registry'
 import { AdminRulesService } from '../../src/modules/admin/service'
@@ -53,7 +54,8 @@ export async function startE2EServer(): Promise<E2EServer> {
   const definitionsRepo = new DefaultDefinitionsRepository(db)
   const rulesRepo = new DefaultRulesRepository(db)
   const revisionsRepo = new DefaultRevisionsRepository(db)
-  const resolutionService = new ConfigResolutionService(productsRepo, definitionsRepo, rulesRepo)
+  const depsRepo = new DefaultDependenciesRepository(db)
+  const resolutionService = new ConfigResolutionService(productsRepo, definitionsRepo, rulesRepo, depsRepo)
 
   const product = await productsRepo.upsertByName('e2e_product', 3600)
   const productId = product.id
@@ -80,6 +82,17 @@ export async function startE2EServer(): Promise<E2EServer> {
     manifest_hash: 'e2e-hash',
     status: 'active',
   })
+  await definitionsRepo.upsert({
+    product_id: productId,
+    feature_key: 'premium',
+    default_entry_json: '{"isEnabled":false}',
+    payload_schema_json: null,
+    manifest_owner: null,
+    source_priority_mode: 'server',
+    delivery_mode: 'remoteCapable',
+    manifest_hash: 'e2e-hash',
+    status: 'active',
+  })
 
   const registry = new ManifestRegistry()
   registry.load([
@@ -97,9 +110,16 @@ export async function startE2EServer(): Promise<E2EServer> {
       sourcePriorityMode: 'serverWins',
       defaultEntry: { isEnabled: false },
     },
+    {
+      key: 'premium',
+      name: 'Premium Features',
+      deliveryMode: 'remoteCapable',
+      sourcePriorityMode: 'serverWins',
+      defaultEntry: { isEnabled: false },
+    },
   ], 'e2e-hash')
 
-  const adminService = new AdminRulesService(db, registry, rulesRepo, productsRepo, revisionsRepo, resolutionService)
+  const adminService = new AdminRulesService(db, registry, rulesRepo, productsRepo, revisionsRepo, resolutionService, depsRepo)
   const verifier = makeEditorVerifier()
 
   const app = await createApp({

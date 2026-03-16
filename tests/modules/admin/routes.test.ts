@@ -8,6 +8,7 @@ import { DefaultProductsRepository } from '../../../src/modules/products/reposit
 import { DefaultDefinitionsRepository } from '../../../src/modules/definitions/repository'
 import { DefaultRulesRepository } from '../../../src/modules/rules/repository'
 import { DefaultRevisionsRepository } from '../../../src/modules/revisions/repository'
+import { DefaultDependenciesRepository } from '../../../src/modules/dependencies/repository'
 import { ConfigResolutionService } from '../../../src/modules/config-resolution/service'
 import { ManifestRegistry } from '../../../src/modules/manifest/registry'
 import { AdminRulesService } from '../../../src/modules/admin/service'
@@ -89,6 +90,7 @@ describe('Admin routes', () => {
   let definitionsRepo: DefaultDefinitionsRepository
   let rulesRepo: DefaultRulesRepository
   let revisionsRepo: DefaultRevisionsRepository
+  let depsRepo: DefaultDependenciesRepository
   let resolutionService: ConfigResolutionService
   let registry: ManifestRegistry
   let adminService: AdminRulesService
@@ -101,7 +103,8 @@ describe('Admin routes', () => {
     definitionsRepo = new DefaultDefinitionsRepository(db)
     rulesRepo = new DefaultRulesRepository(db)
     revisionsRepo = new DefaultRevisionsRepository(db)
-    resolutionService = new ConfigResolutionService(productsRepo, definitionsRepo, rulesRepo)
+    depsRepo = new DefaultDependenciesRepository(db)
+    resolutionService = new ConfigResolutionService(productsRepo, definitionsRepo, rulesRepo, depsRepo)
 
     const product = await productsRepo.upsertByName('test_product', 3600)
     productId = product.id
@@ -127,7 +130,7 @@ describe('Admin routes', () => {
       },
     ], 'hash1')
 
-    adminService = new AdminRulesService(db, registry, rulesRepo, productsRepo, revisionsRepo, resolutionService)
+    adminService = new AdminRulesService(db, registry, rulesRepo, productsRepo, revisionsRepo, resolutionService, depsRepo)
   })
 
   afterAll(async () => {
@@ -137,6 +140,7 @@ describe('Admin routes', () => {
   beforeEach(async () => {
     await db('config_revisions').delete()
     await db('feature_rules').delete()
+    await db('flag_dependencies').delete()
     await db('products').where({ id: productId }).update({ current_revision: 0 })
     resolutionService.invalidateCache(productId)
   })
@@ -1140,6 +1144,227 @@ describe('Admin routes', () => {
           headers: { Authorization: 'Bearer editor-token' },
         })
         expect(res.statusCode).toBe(200)
+      } finally {
+        await app.close()
+      }
+    })
+  })
+
+  // ─── DEP: Dependency API endpoint tests ──────────────────────────────────
+
+  describe('Dependency endpoints (DEP)', () => {
+    it('DEP1: GET /admin/api/dependencies returns 200 with empty array', async () => {
+      const app = await buildApp(viewerVerifier())
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/admin/api/dependencies',
+          headers: { Authorization: 'Bearer viewer-token' },
+        })
+        expect(res.statusCode).toBe(200)
+        const body = res.json<{ dependencies: unknown[] }>()
+        expect(body.dependencies).toEqual([])
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('DEP2: GET /admin/api/dependencies viewer can access', async () => {
+      const app = await buildApp(viewerVerifier())
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/admin/api/dependencies',
+          headers: { Authorization: 'Bearer viewer-token' },
+        })
+        expect(res.statusCode).toBe(200)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('DEP3: GET /admin/api/dependencies no auth returns 401', async () => {
+      const app = await buildApp(anonVerifier())
+      try {
+        const res = await app.inject({ method: 'GET', url: '/admin/api/dependencies' })
+        expect(res.statusCode).toBe(401)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('DEP4: POST /admin/api/dependencies creates edge (editor) returns 201', async () => {
+      const app = await buildApp(editorVerifier())
+      try {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/admin/api/dependencies',
+          headers: { Authorization: 'Bearer editor-token', 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            parentKey: 'chat',
+            childKey: 'video_call',
+            expectedRevision: 0,
+          }),
+        })
+        expect(res.statusCode).toBe(201)
+        const body = res.json<{ dependency: { parent_feature_key: string; child_feature_key: string } }>()
+        expect(body.dependency.parent_feature_key).toBe('chat')
+        expect(body.dependency.child_feature_key).toBe('video_call')
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('DEP5: POST /admin/api/dependencies with viewer returns 403', async () => {
+      const app = await buildApp(viewerVerifier())
+      try {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/admin/api/dependencies',
+          headers: { Authorization: 'Bearer viewer-token', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ parentKey: 'chat', childKey: 'video_call', expectedRevision: 0 }),
+        })
+        expect(res.statusCode).toBe(403)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('DEP6: POST /admin/api/dependencies 400 on missing fields', async () => {
+      const app = await buildApp(editorVerifier())
+      try {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/admin/api/dependencies',
+          headers: { Authorization: 'Bearer editor-token', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ parentKey: 'chat' }), // childKey and expectedRevision missing
+        })
+        expect(res.statusCode).toBe(400)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('DEP7: POST /admin/api/dependencies 409 on duplicate edge', async () => {
+      // First add
+      await adminService.addDependency({ productId, parentKey: 'chat', childKey: 'video_call', expectedRevision: 0 })
+
+      const app = await buildApp(editorVerifier())
+      try {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/admin/api/dependencies',
+          headers: { Authorization: 'Bearer editor-token', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ parentKey: 'chat', childKey: 'video_call', expectedRevision: 1 }),
+        })
+        // ValidationError maps to 400 (duplicate), not 409
+        expect(res.statusCode).toBe(400)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('DEP8: POST /admin/api/dependencies 400 on cycle', async () => {
+      // First: video_call → chat
+      await adminService.addDependency({ productId, parentKey: 'video_call', childKey: 'chat', expectedRevision: 0 })
+
+      const app = await buildApp(editorVerifier())
+      try {
+        // Proposing chat → video_call would create a cycle
+        const res = await app.inject({
+          method: 'POST',
+          url: '/admin/api/dependencies',
+          headers: { Authorization: 'Bearer editor-token', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ parentKey: 'chat', childKey: 'video_call', expectedRevision: 1 }),
+        })
+        expect(res.statusCode).toBe(400)
+        const body = res.json<{ error: string }>()
+        expect(body.error).toMatch(/cycle/)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('DEP9: DELETE /admin/api/dependencies/:id removes edge (editor) returns 200', async () => {
+      const dep = await adminService.addDependency({ productId, parentKey: 'chat', childKey: 'video_call', expectedRevision: 0 })
+
+      const app = await buildApp(editorVerifier())
+      try {
+        const res = await app.inject({
+          method: 'DELETE',
+          url: `/admin/api/dependencies/${dep.id}`,
+          headers: { Authorization: 'Bearer editor-token', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expectedRevision: 1 }),
+        })
+        expect(res.statusCode).toBe(200)
+        const body = res.json<{ ok: boolean }>()
+        expect(body.ok).toBe(true)
+
+        // Verify it's gone
+        const listRes = await app.inject({
+          method: 'GET',
+          url: '/admin/api/dependencies',
+          headers: { Authorization: 'Bearer editor-token' },
+        })
+        const listBody = listRes.json<{ dependencies: unknown[] }>()
+        expect(listBody.dependencies).toHaveLength(0)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('DEP10: DELETE /admin/api/dependencies/:id 404 on missing', async () => {
+      const app = await buildApp(editorVerifier())
+      try {
+        const res = await app.inject({
+          method: 'DELETE',
+          url: '/admin/api/dependencies/99999',
+          headers: { Authorization: 'Bearer editor-token', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expectedRevision: 0 }),
+        })
+        expect(res.statusCode).toBe(404)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('DEP11: DELETE /admin/api/dependencies/:id 409 on stale revision', async () => {
+      const dep = await adminService.addDependency({ productId, parentKey: 'chat', childKey: 'video_call', expectedRevision: 0 })
+
+      const app = await buildApp(editorVerifier())
+      try {
+        const res = await app.inject({
+          method: 'DELETE',
+          url: `/admin/api/dependencies/${dep.id}`,
+          headers: { Authorization: 'Bearer editor-token', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expectedRevision: 0 }), // stale — current is 1 after add
+        })
+        expect(res.statusCode).toBe(409)
+      } finally {
+        await app.close()
+      }
+    })
+
+    it('DEP12: POST then GET returns newly created dependency', async () => {
+      const app = await buildApp(editorVerifier())
+      try {
+        await app.inject({
+          method: 'POST',
+          url: '/admin/api/dependencies',
+          headers: { Authorization: 'Bearer editor-token', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ parentKey: 'chat', childKey: 'video_call', reason: 'test reason', expectedRevision: 0 }),
+        })
+
+        const listRes = await app.inject({
+          method: 'GET',
+          url: '/admin/api/dependencies',
+          headers: { Authorization: 'Bearer editor-token' },
+        })
+        expect(listRes.statusCode).toBe(200)
+        const body = listRes.json<{ dependencies: Array<{ parent_feature_key: string; reason: string | null }> }>()
+        expect(body.dependencies).toHaveLength(1)
+        expect(body.dependencies[0].parent_feature_key).toBe('chat')
+        expect(body.dependencies[0].reason).toBe('test reason')
       } finally {
         await app.close()
       }

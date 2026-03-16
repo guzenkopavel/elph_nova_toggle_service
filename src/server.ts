@@ -10,6 +10,7 @@ import { DefaultDefinitionsRepository } from './modules/definitions/repository'
 import { DefaultProductsRepository } from './modules/products/repository'
 import { DefaultRulesRepository } from './modules/rules/repository'
 import { DefaultRevisionsRepository } from './modules/revisions/repository'
+import { DefaultDependenciesRepository } from './modules/dependencies/repository'
 import { ConfigResolutionService } from './modules/config-resolution/service'
 import { AdminRulesService } from './modules/admin/service'
 import { createTokenVerifier } from './modules/auth/token-verifier'
@@ -41,7 +42,8 @@ async function start() {
 
     const rulesRepo = new DefaultRulesRepository(defaultDb)
     const revisionsRepo = new DefaultRevisionsRepository(defaultDb)
-    const resolutionService = new ConfigResolutionService(productsRepo, definitionsRepo, rulesRepo)
+    const depsRepo = new DefaultDependenciesRepository(defaultDb)
+    const resolutionService = new ConfigResolutionService(productsRepo, definitionsRepo, rulesRepo, depsRepo)
 
     const adminService = new AdminRulesService(
       defaultDb,
@@ -50,6 +52,7 @@ async function start() {
       productsRepo,
       revisionsRepo,
       resolutionService,
+      depsRepo,
     )
 
     const tokenVerifier = createTokenVerifier({

@@ -61,6 +61,17 @@ const disableRuleBodySchema = z.object({
   expectedRevision: z.number().int().min(0),
 })
 
+const addDependencyBodySchema = z.object({
+  parentKey: z.string().min(1),
+  childKey: z.string().min(1),
+  reason: z.string().optional(),
+  expectedRevision: z.number().int().min(0),
+})
+
+const removeDependencyBodySchema = z.object({
+  expectedRevision: z.number().int().min(0),
+})
+
 // ─── Plugin ───────────────────────────────────────────────────────────────────
 
 const adminPlugin: FastifyPluginAsync<AdminPluginOptions> = async (fastify, options) => {
@@ -203,6 +214,65 @@ const adminPlugin: FastifyPluginAsync<AdminPluginOptions> = async (fastify, opti
         ttl: snapshot.ttl,
         features: snapshot.features,
       })
+    } catch (err) {
+      return handleServiceError(err, reply)
+    }
+  })
+
+  // GET /admin/api/dependencies — list all dependency edges
+  fastify.get('/admin/api/dependencies', {
+    preHandler: viewerHook,
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
+  }, async (_request, reply) => {
+    const deps = await service.listDependencies(productId)
+    return reply.code(200).send({ dependencies: deps })
+  })
+
+  // POST /admin/api/dependencies — add dependency edge
+  fastify.post<{ Body: unknown }>('/admin/api/dependencies', {
+    preHandler: editorHook,
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
+  }, async (request, reply) => {
+    const parseResult = addDependencyBodySchema.safeParse(request.body)
+    if (!parseResult.success) {
+      return reply.code(400).send({ error: parseResult.error.errors[0]?.message ?? 'Invalid request body' })
+    }
+    const body = parseResult.data
+    try {
+      const dep = await service.addDependency({
+        productId,
+        parentKey: body.parentKey,
+        childKey: body.childKey,
+        reason: body.reason,
+        expectedRevision: body.expectedRevision,
+        changedBy: request.adminSub ?? 'unknown',
+      })
+      return reply.code(201).send({ dependency: dep })
+    } catch (err) {
+      return handleServiceError(err, reply)
+    }
+  })
+
+  // DELETE /admin/api/dependencies/:id — remove dependency edge
+  fastify.delete<{ Params: { id: string }; Body: unknown }>('/admin/api/dependencies/:id', {
+    preHandler: editorHook,
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
+  }, async (request, reply) => {
+    const depId = parseInt(request.params.id, 10)
+    if (isNaN(depId)) return reply.code(400).send({ error: 'Invalid dependency id' })
+    const parseResult = removeDependencyBodySchema.safeParse(request.body ?? {})
+    if (!parseResult.success) {
+      return reply.code(400).send({ error: parseResult.error.errors[0]?.message ?? 'Invalid request body' })
+    }
+    const body = parseResult.data
+    try {
+      await service.removeDependency({
+        productId,
+        depId,
+        expectedRevision: body.expectedRevision,
+        changedBy: request.adminSub ?? 'unknown',
+      })
+      return reply.code(200).send({ ok: true })
     } catch (err) {
       return handleServiceError(err, reply)
     }

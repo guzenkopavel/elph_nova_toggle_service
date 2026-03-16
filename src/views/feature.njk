@@ -67,4 +67,81 @@
 {% if errorMessage %}
 <p class="error">{{ errorMessage }}</p>
 {% endif %}
+
+<h2>Dependencies</h2>
+<p>Dependencies ensure a child feature is automatically disabled when a parent feature is disabled (AND semantics).</p>
+
+{% if parentEdges.length %}
+<h3>This feature depends on (parents):</h3>
+<table>
+  <thead>
+    <tr><th>Parent Key</th><th>Reason</th><th>Actions</th></tr>
+  </thead>
+  <tbody>
+    {% for edge in parentEdges %}
+    <tr>
+      <td><a href="/admin/features/{{ edge.parent_feature_key }}">{{ edge.parent_feature_key }}</a></td>
+      <td>{{ edge.reason or "-" }}</td>
+      <td>
+        <form method="POST" action="/admin/features/{{ featureKey }}/dependencies/{{ edge.id }}/remove" style="display:inline">
+          <input type="hidden" name="_csrf" value="{{ csrfToken }}">
+          <input type="hidden" name="expected_revision" value="{{ currentRevision }}">
+          <button type="submit" onclick="return confirm('Remove dependency?')">Remove</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No parent dependencies.</p>
+{% endif %}
+
+{% if childEdges.length %}
+<h3>Features that depend on this (children):</h3>
+<table>
+  <thead>
+    <tr><th>Child Key</th><th>Reason</th><th>Actions</th></tr>
+  </thead>
+  <tbody>
+    {% for edge in childEdges %}
+    <tr>
+      <td><a href="/admin/features/{{ edge.child_feature_key }}">{{ edge.child_feature_key }}</a></td>
+      <td>{{ edge.reason or "-" }}</td>
+      <td>
+        <form method="POST" action="/admin/features/{{ edge.child_feature_key }}/dependencies/{{ edge.id }}/remove" style="display:inline">
+          <input type="hidden" name="_csrf" value="{{ csrfToken }}">
+          <input type="hidden" name="expected_revision" value="{{ currentRevision }}">
+          <button type="submit" onclick="return confirm('Remove dependency?')">Remove</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No child dependencies.</p>
+{% endif %}
+
+<h3>Add Dependency</h3>
+<form method="POST" action="/admin/features/{{ featureKey }}/dependencies/add">
+  <input type="hidden" name="_csrf" value="{{ csrfToken }}">
+  <input type="hidden" name="expected_revision" value="{{ currentRevision }}">
+  <div>
+    <label>Relationship:</label>
+    <select name="direction">
+      <option value="child">{{ featureKey }} depends on (parent):</option>
+      <option value="parent">Make {{ featureKey }} a parent of (child):</option>
+    </select>
+    <input type="text" name="other_key" placeholder="feature_key" required>
+  </div>
+  <div>
+    <label>Reason (optional):</label>
+    <input type="text" name="reason" placeholder="optional reason">
+  </div>
+  <button type="submit">Add Dependency</button>
+</form>
+{% if depErrorMessage %}
+<p class="error">{{ depErrorMessage }}</p>
+{% endif %}
 {% endblock %}
