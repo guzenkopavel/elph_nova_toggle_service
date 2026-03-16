@@ -7,10 +7,11 @@
   "engines": {
     "node": ">=20"
   },
-  "main": "dist/server.js",
+  "main": "dist/src/server.js",
   "scripts": {
     "build": "tsc --project tsconfig.json",
-    "start": "node dist/server.js",
+    "postbuild": "cp -r src/views dist/src/",
+    "start": "node dist/src/server.js",
     "start:dev": "tsx watch src/server.ts",
     "test": "vitest run",
     "test:watch": "vitest",

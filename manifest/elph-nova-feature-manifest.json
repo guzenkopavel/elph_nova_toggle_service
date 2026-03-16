@@ -1,0 +1,23 @@
+{
+  "manifestVersion": 1,
+  "product": {
+    "id": "test-product",
+    "name": "Elph Nova Test"
+  },
+  "features": [
+    {
+      "key": "chat",
+      "name": "Chat Feature",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": false }
+    },
+    {
+      "key": "video_call",
+      "name": "Video Call",
+      "deliveryMode": "remoteCapable",
+      "sourcePriorityMode": "serverWins",
+      "defaultEntry": { "isEnabled": false }
+    }
+  ]
+}
