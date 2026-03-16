@@ -135,7 +135,7 @@ describe('AdminRulesService', () => {
     const revisionsRepo = makeRevisionsRepo()
     const resolutionService = makeResolutionService()
 
-    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any)
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any, makeDepsRepo() as any)
 
     await expect(service.createRule({
       productId: 10,
@@ -156,7 +156,7 @@ describe('AdminRulesService', () => {
     const revisionsRepo = makeRevisionsRepo()
     const resolutionService = makeResolutionService()
 
-    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any)
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any, makeDepsRepo() as any)
 
     await expect(service.createRule({
       productId: 10,
@@ -178,7 +178,7 @@ describe('AdminRulesService', () => {
     const revisionsRepo = makeRevisionsRepo()
     const resolutionService = makeResolutionService()
 
-    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any)
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any, makeDepsRepo() as any)
 
     await expect(service.createRule({
       productId: 10,
@@ -200,7 +200,7 @@ describe('AdminRulesService', () => {
     const revisionsRepo = makeRevisionsRepo()
     const resolutionService = makeResolutionService()
 
-    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any)
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any, makeDepsRepo() as any)
 
     const result = await service.createRule({
       productId: 10,
@@ -225,7 +225,7 @@ describe('AdminRulesService', () => {
     const revisionsRepo = makeRevisionsRepo()
     const resolutionService = makeResolutionService()
 
-    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any)
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any, makeDepsRepo() as any)
 
     await expect(service.updateRule({
       productId: 10,
@@ -244,7 +244,7 @@ describe('AdminRulesService', () => {
     const revisionsRepo = makeRevisionsRepo()
     const resolutionService = makeResolutionService()
 
-    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any)
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any, makeDepsRepo() as any)
 
     await expect(service.updateRule({
       productId: 10,
@@ -267,7 +267,7 @@ describe('AdminRulesService', () => {
     const revisionsRepo = makeRevisionsRepo()
     const resolutionService = makeResolutionService()
 
-    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any)
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any, makeDepsRepo() as any)
 
     const result = await service.updateRule({
       productId: 10,
@@ -289,7 +289,7 @@ describe('AdminRulesService', () => {
     const revisionsRepo = makeRevisionsRepo()
     const resolutionService = makeResolutionService()
 
-    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any)
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any, makeDepsRepo() as any)
 
     await expect(service.disableRule({
       productId: 10,
@@ -307,7 +307,7 @@ describe('AdminRulesService', () => {
     const revisionsRepo = makeRevisionsRepo()
     const resolutionService = makeResolutionService()
 
-    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any)
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any, makeDepsRepo() as any)
 
     await service.disableRule({
       productId: 10,
@@ -346,6 +346,13 @@ describe('AdminRulesService', () => {
   }
 
   it('D1: addDependency creates edge and bumps revision', async () => {
+    // Insert required feature_definitions for DB validation (C3)
+    await db('products').insert({ id: 10, name: 'test', ttl_seconds: 3600, current_revision: 0 })
+    await db('feature_definitions').insert([
+      { product_id: 10, feature_key: 'chat', status: 'active', default_entry_json: '{"isEnabled":false}', source_priority_mode: 'server', delivery_mode: 'remoteCapable', manifest_hash: 'h1' },
+      { product_id: 10, feature_key: 'video_call', status: 'active', default_entry_json: '{"isEnabled":false}', source_priority_mode: 'server', delivery_mode: 'remoteCapable', manifest_hash: 'h1' },
+    ])
+
     const registry = makeRegistry(true)
     const rulesRepo = makeRulesRepo()
     const productsRepo = makeProductsRepo()
@@ -408,6 +415,13 @@ describe('AdminRulesService', () => {
   })
 
   it('D4: addDependency ValidationError on duplicate edge', async () => {
+    // Insert required feature_definitions for DB validation (C3)
+    await db('products').insert({ id: 10, name: 'test', ttl_seconds: 3600, current_revision: 0 })
+    await db('feature_definitions').insert([
+      { product_id: 10, feature_key: 'chat', status: 'active', default_entry_json: '{"isEnabled":false}', source_priority_mode: 'server', delivery_mode: 'remoteCapable', manifest_hash: 'h1' },
+      { product_id: 10, feature_key: 'video_call', status: 'active', default_entry_json: '{"isEnabled":false}', source_priority_mode: 'server', delivery_mode: 'remoteCapable', manifest_hash: 'h1' },
+    ])
+
     const registry = makeRegistry(true)
     const rulesRepo = makeRulesRepo()
     const productsRepo = makeProductsRepo()
@@ -428,6 +442,13 @@ describe('AdminRulesService', () => {
   })
 
   it('D5: addDependency ValidationError on cycle', async () => {
+    // Insert required feature_definitions for DB validation (C3)
+    await db('products').insert({ id: 10, name: 'test', ttl_seconds: 3600, current_revision: 0 })
+    await db('feature_definitions').insert([
+      { product_id: 10, feature_key: 'chat', status: 'active', default_entry_json: '{"isEnabled":false}', source_priority_mode: 'server', delivery_mode: 'remoteCapable', manifest_hash: 'h1' },
+      { product_id: 10, feature_key: 'video_call', status: 'active', default_entry_json: '{"isEnabled":false}', source_priority_mode: 'server', delivery_mode: 'remoteCapable', manifest_hash: 'h1' },
+    ])
+
     const registry = makeRegistry(true)
     const rulesRepo = makeRulesRepo()
     const productsRepo = makeProductsRepo()
@@ -520,18 +541,20 @@ describe('AdminRulesService', () => {
     expect(depsRepo.listByProduct).toHaveBeenCalledWith(10)
   })
 
-  it('D10: listDependencies returns [] when depsRepo not provided', async () => {
+  it('D10: listDependencies delegates to depsRepo', async () => {
     const registry = makeRegistry(true)
     const rulesRepo = makeRulesRepo()
     const productsRepo = makeProductsRepo()
     const revisionsRepo = makeRevisionsRepo()
     const resolutionService = makeResolutionService()
+    const deps = [makeDep(), makeDep({ id: 3, child_feature_key: 'calls' })]
+    const depsRepo = makeDepsRepo({ listByProduct: vi.fn().mockResolvedValue(deps) })
 
-    // No depsRepo passed
-    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any)
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any, depsRepo as any)
 
     const result = await service.listDependencies(10)
-    expect(result).toEqual([])
+    expect(result).toHaveLength(2)
+    expect(depsRepo.listByProduct).toHaveBeenCalledWith(10)
   })
 
   // U10: validateEntryJson rejects unknown fields when payload schema has fields
@@ -547,7 +570,7 @@ describe('AdminRulesService', () => {
     const revisionsRepo = makeRevisionsRepo()
     const resolutionService = makeResolutionService()
 
-    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any)
+    const service = new AdminRulesService(db, registry as any, rulesRepo as any, productsRepo as any, revisionsRepo as any, resolutionService as any, makeDepsRepo() as any)
 
     await expect(service.createRule({
       productId: 10,

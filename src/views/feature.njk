@@ -86,6 +86,7 @@
         <form method="POST" action="/admin/features/{{ featureKey }}/dependencies/{{ edge.id }}/remove" style="display:inline">
           <input type="hidden" name="_csrf" value="{{ csrfToken }}">
           <input type="hidden" name="expected_revision" value="{{ currentRevision }}">
+          <input type="text" name="reason" placeholder="reason (optional)" style="width:150px">
           <button type="submit" onclick="return confirm('Remove dependency?')">Remove</button>
         </form>
       </td>
@@ -112,6 +113,7 @@
         <form method="POST" action="/admin/features/{{ edge.child_feature_key }}/dependencies/{{ edge.id }}/remove" style="display:inline">
           <input type="hidden" name="_csrf" value="{{ csrfToken }}">
           <input type="hidden" name="expected_revision" value="{{ currentRevision }}">
+          <input type="text" name="reason" placeholder="reason (optional)" style="width:150px">
           <button type="submit" onclick="return confirm('Remove dependency?')">Remove</button>
         </form>
       </td>

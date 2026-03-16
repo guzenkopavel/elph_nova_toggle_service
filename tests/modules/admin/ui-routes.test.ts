@@ -8,6 +8,7 @@ import { DefaultProductsRepository } from '../../../src/modules/products/reposit
 import { DefaultDefinitionsRepository } from '../../../src/modules/definitions/repository'
 import { DefaultRulesRepository } from '../../../src/modules/rules/repository'
 import { DefaultRevisionsRepository } from '../../../src/modules/revisions/repository'
+import { DefaultDependenciesRepository } from '../../../src/modules/dependencies/repository'
 import { ConfigResolutionService } from '../../../src/modules/config-resolution/service'
 import { ManifestRegistry } from '../../../src/modules/manifest/registry'
 import { AdminRulesService } from '../../../src/modules/admin/service'
@@ -83,6 +84,7 @@ describe('Admin UI routes', () => {
   let definitionsRepo: DefaultDefinitionsRepository
   let rulesRepo: DefaultRulesRepository
   let revisionsRepo: DefaultRevisionsRepository
+  let depsRepo: DefaultDependenciesRepository
   let resolutionService: ConfigResolutionService
   let registry: ManifestRegistry
   let adminService: AdminRulesService
@@ -95,6 +97,7 @@ describe('Admin UI routes', () => {
     definitionsRepo = new DefaultDefinitionsRepository(db)
     rulesRepo = new DefaultRulesRepository(db)
     revisionsRepo = new DefaultRevisionsRepository(db)
+    depsRepo = new DefaultDependenciesRepository(db)
     resolutionService = new ConfigResolutionService(productsRepo, definitionsRepo, rulesRepo)
 
     const product = await productsRepo.upsertByName('test_product_ui', 3600)
@@ -121,7 +124,7 @@ describe('Admin UI routes', () => {
       },
     ], 'hash1')
 
-    adminService = new AdminRulesService(db, registry, rulesRepo, productsRepo, revisionsRepo, resolutionService)
+    adminService = new AdminRulesService(db, registry, rulesRepo, productsRepo, revisionsRepo, resolutionService, depsRepo)
   })
 
   afterAll(async () => {

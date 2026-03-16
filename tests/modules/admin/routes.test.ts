@@ -1369,6 +1369,24 @@ describe('Admin routes', () => {
         await app.close()
       }
     })
+
+    it('DEP13: DELETE /admin/api/dependencies/:id with viewer token returns 403', async () => {
+      // Create a dependency as editor first
+      const dep = await adminService.addDependency({ productId, parentKey: 'chat', childKey: 'video_call', expectedRevision: 0 })
+
+      const app = await buildApp(viewerVerifier())
+      try {
+        const res = await app.inject({
+          method: 'DELETE',
+          url: `/admin/api/dependencies/${dep.id}`,
+          headers: { Authorization: 'Bearer viewer-token', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expectedRevision: 1 }),
+        })
+        expect(res.statusCode).toBe(403)
+      } finally {
+        await app.close()
+      }
+    })
   })
 
   // ─── Helpers ─────────────────────────────────────────────────────────────

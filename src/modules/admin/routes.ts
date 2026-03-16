@@ -64,12 +64,13 @@ const disableRuleBodySchema = z.object({
 const addDependencyBodySchema = z.object({
   parentKey: z.string().min(1),
   childKey: z.string().min(1),
-  reason: z.string().optional(),
+  reason: z.string().min(1).optional(),
   expectedRevision: z.number().int().min(0),
 })
 
 const removeDependencyBodySchema = z.object({
   expectedRevision: z.number().int().min(0),
+  reason: z.string().min(1).optional(),
 })
 
 // ─── Plugin ───────────────────────────────────────────────────────────────────
@@ -97,7 +98,7 @@ const adminPlugin: FastifyPluginAsync<AdminPluginOptions> = async (fastify, opti
     const ruleId = parseInt(request.params.id, 10)
     if (isNaN(ruleId)) return reply.code(400).send({ error: 'Invalid rule id' })
     try {
-      const rule = await service.getRule(ruleId)
+      const rule = await service.getRule(ruleId, productId)
       return reply.code(200).send({ rule })
     } catch (err) {
       return handleServiceError(err, reply)
@@ -224,8 +225,12 @@ const adminPlugin: FastifyPluginAsync<AdminPluginOptions> = async (fastify, opti
     preHandler: viewerHook,
     ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (_request, reply) => {
-    const deps = await service.listDependencies(productId)
-    return reply.code(200).send({ dependencies: deps })
+    try {
+      const deps = await service.listDependencies(productId)
+      return reply.code(200).send({ dependencies: deps })
+    } catch (err) {
+      return handleServiceError(err, reply)
+    }
   })
 
   // POST /admin/api/dependencies — add dependency edge
@@ -269,6 +274,7 @@ const adminPlugin: FastifyPluginAsync<AdminPluginOptions> = async (fastify, opti
       await service.removeDependency({
         productId,
         depId,
+        reason: body.reason,
         expectedRevision: body.expectedRevision,
         changedBy: request.adminSub ?? 'unknown',
       })

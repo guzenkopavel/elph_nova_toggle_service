@@ -7,6 +7,7 @@ import { DefaultProductsRepository } from '../../../src/modules/products/reposit
 import { DefaultDefinitionsRepository } from '../../../src/modules/definitions/repository'
 import { DefaultRulesRepository } from '../../../src/modules/rules/repository'
 import { DefaultRevisionsRepository } from '../../../src/modules/revisions/repository'
+import { DefaultDependenciesRepository } from '../../../src/modules/dependencies/repository'
 import { ConfigResolutionService } from '../../../src/modules/config-resolution/service'
 import { ManifestRegistry } from '../../../src/modules/manifest/registry'
 import { AdminRulesService } from '../../../src/modules/admin/service'
@@ -80,6 +81,7 @@ export async function buildHardeningApp(
   const definitionsRepo = new DefaultDefinitionsRepository(db)
   const rulesRepo = new DefaultRulesRepository(db)
   const revisionsRepo = new DefaultRevisionsRepository(db)
+  const depsRepo = new DefaultDependenciesRepository(db)
   const resolutionService = new ConfigResolutionService(productsRepo, definitionsRepo, rulesRepo)
 
   const product = await productsRepo.upsertByName('test_hardening', 3600)
@@ -113,6 +115,7 @@ export async function buildHardeningApp(
     productsRepo,
     revisionsRepo,
     resolutionService,
+    depsRepo,
   )
 
   const defaultOptions: AppOptions = {

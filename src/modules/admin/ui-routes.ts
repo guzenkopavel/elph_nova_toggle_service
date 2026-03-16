@@ -63,7 +63,7 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
   // ─── GET /admin → redirect ──────────────────────────────────────────────────
 
   fastify.get('/admin', {
-    preHandler: makeAdminAuthHook(verifier, ROLE_VIEWER),
+    preHandler: viewerHtmlHook,
     ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
   }, async (_request, reply) => {
     return reply.redirect('/admin/features')
@@ -179,7 +179,7 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
 
     let rule
     try {
-      rule = await service.getRule(ruleId)
+      rule = await service.getRule(ruleId, productId)
     } catch (err) {
       if (err instanceof NotFoundError) {
         return reply.type('text/html').code(404).send(
@@ -589,6 +589,7 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
 
     const body = request.body ?? {}
     const expectedRevision = parseInt(body['expected_revision'] ?? '0', 10)
+    const reason = (body['reason'] ?? '').trim() || undefined
 
     const renderDepError = async (message: string) => {
       const definition = registry.getByKey(key)
@@ -616,6 +617,7 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
       await service.removeDependency({
         productId,
         depId,
+        reason,
         expectedRevision,
         changedBy: request.adminSub ?? 'unknown',
       })

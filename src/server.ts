@@ -30,8 +30,6 @@ async function start() {
 
     const definitionsRepo = new DefaultDefinitionsRepository(defaultDb)
     const productsRepo = new DefaultProductsRepository(defaultDb)
-    const syncService = new ManifestSyncService(defaultDb, definitionsRepo, productsRepo)
-    const driftCheck = syncService.driftReadyCheck(env.DEFAULT_PRODUCT_ID, hash)
 
     // Resolve numeric productId from the product name. upsertByName is idempotent —
     // it inserts if absent (handles first run before sync-manifest) and returns the row.
@@ -43,7 +41,16 @@ async function start() {
     const rulesRepo = new DefaultRulesRepository(defaultDb)
     const revisionsRepo = new DefaultRevisionsRepository(defaultDb)
     const depsRepo = new DefaultDependenciesRepository(defaultDb)
-    const resolutionService = new ConfigResolutionService(productsRepo, definitionsRepo, rulesRepo, depsRepo)
+    const resolutionService = new ConfigResolutionService(
+      productsRepo,
+      definitionsRepo,
+      rulesRepo,
+      depsRepo,
+      (obj, msg) => logger.warn(obj, msg),
+    )
+
+    const syncService = new ManifestSyncService(defaultDb, definitionsRepo, productsRepo, resolutionService)
+    const driftCheck = syncService.driftReadyCheck(env.DEFAULT_PRODUCT_ID, hash)
 
     const adminService = new AdminRulesService(
       defaultDb,

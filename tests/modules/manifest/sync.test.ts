@@ -199,6 +199,31 @@ describe('ManifestSyncService', () => {
     expect(updated.manifest_hash).toBe('updated_hash')
   })
 
+  it('calls invalidateCache after sync when resolutionService is provided', async () => {
+    const mockResolutionService = { invalidateCache: vi.fn() }
+    const syncServiceWithCache = new ManifestSyncService(db, definitionsRepo, productsRepo, mockResolutionService)
+
+    const result = await syncServiceWithCache.sync({
+      productName: 'elph_nova',
+      manifestHash: 'hash_v1',
+      definitions: [makeDefinition('chat')],
+    })
+
+    expect(mockResolutionService.invalidateCache).toHaveBeenCalledOnce()
+    expect(mockResolutionService.invalidateCache).toHaveBeenCalledWith(result.productId)
+  })
+
+  it('does not call invalidateCache when resolutionService is not provided', async () => {
+    // syncService is created without resolutionService in the default beforeEach
+    const result = await syncService.sync({
+      productName: 'elph_nova',
+      manifestHash: 'hash_v1',
+      definitions: [makeDefinition('chat')],
+    })
+    // Just ensure it doesn't throw and returns a valid result
+    expect(result.productId).toBeGreaterThan(0)
+  })
+
   it('rolls back the transaction when archive throws', async () => {
     await syncService.sync({
       productName: 'elph_nova',

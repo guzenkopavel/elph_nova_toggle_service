@@ -29,6 +29,7 @@ export class ConfigResolutionService {
     private readonly definitionsRepo: DefinitionsRepository,
     private readonly rulesRepo: RulesRepository,
     private readonly depsRepo?: DependenciesRepository,
+    private readonly warn?: (obj: object, msg: string) => void,
   ) {}
 
   private cacheKey(productId: number, revision: number): string {
@@ -103,7 +104,7 @@ export class ConfigResolutionService {
       features[featureKey] = bestRule ? bestRule.parsedEntry : defaultEntry
     }
 
-    const propagated = applyDependencyPropagation(features, parsed.parsedEdges)
+    const propagated = applyDependencyPropagation(features, parsed.parsedEdges, this.warn)
 
     return {
       productId: parsed.productId,
@@ -145,6 +146,7 @@ function parseEntryJson(json: string, featureKey: string): ResolvedEntry {
 function applyDependencyPropagation(
   features: Record<string, ResolvedEntry>,
   edges: Array<{ parent_feature_key: string; child_feature_key: string }>,
+  warn?: (obj: object, msg: string) => void,
 ): Record<string, ResolvedEntry> {
   if (edges.length === 0) return features
 
@@ -191,7 +193,8 @@ function applyDependencyPropagation(
   // Safety net: log cycle nodes, skip propagation for them (don't crash)
   const cycleNodes = [...inDegree.keys()].filter(k => !processed.has(k) && (inDegree.get(k) ?? 0) > 0)
   if (cycleNodes.length > 0) {
-    console.warn('[ConfigResolutionService] cycle detected in flag dependencies, skipping:', cycleNodes)
+    const logWarn = warn ?? ((obj: object, msg: string) => console.warn(msg, obj))
+    logWarn({ cycleNodes }, '[ConfigResolutionService] cycle detected in flag dependencies, skipping')
   }
 
   return result

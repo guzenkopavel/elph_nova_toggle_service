@@ -77,6 +77,7 @@ export interface AddDependencyInput {
 export interface RemoveDependencyInput {
   productId: number
   depId: number
+  reason?: string
   expectedRevision: number
   changedBy?: string
 }
@@ -89,7 +90,7 @@ export class AdminRulesService {
     private readonly productsRepo: DefaultProductsRepository,
     private readonly revisionsRepo: DefaultRevisionsRepository,
     private readonly resolutionService: ConfigResolutionService,
-    private readonly depsRepo?: DependenciesRepository,
+    private readonly depsRepo: DependenciesRepository,
   ) {}
 
   async createRule(input: CreateRuleInput): Promise<RuleRow> {
@@ -265,7 +266,6 @@ export class AdminRulesService {
         throw new ConflictError(`Revision conflict: expected ${input.expectedRevision}`)
       }
 
-      // new_value_json is NOT NULL in the schema — use the old value to satisfy the constraint
       await this.revisionsRepo.insert({
         product_id: input.productId,
         revision: newRevision,
@@ -273,7 +273,7 @@ export class AdminRulesService {
         feature_key: existing.feature_key,
         rule_id: input.ruleId,
         old_value_json: existing.entry_json,
-        new_value_json: existing.entry_json,
+        new_value_json: JSON.stringify({ is_active: false }),
         reason: input.reason,
         changed_by: input.changedBy ?? 'unknown',
         request_id: null,
@@ -288,9 +288,10 @@ export class AdminRulesService {
     return this.rulesRepo.listAllActive(productId)
   }
 
-  async getRule(ruleId: number): Promise<RuleRow> {
+  async getRule(ruleId: number, productId: number): Promise<RuleRow> {
     const rule = await this.rulesRepo.findById(ruleId)
     if (!rule) throw new NotFoundError(`Rule ${ruleId} not found`)
+    if (rule.product_id !== productId) throw new NotFoundError(`Rule ${ruleId} not found`)
     return rule
   }
 
@@ -309,8 +310,6 @@ export class AdminRulesService {
   }
 
   async addDependency(input: AddDependencyInput): Promise<DependencyRow> {
-    if (!this.depsRepo) throw new Error('DependenciesRepository not configured')
-
     if (!this.registry.hasKey(input.parentKey)) {
       throw new ValidationError(`Feature key '${input.parentKey}' is not in the manifest registry`)
     }
@@ -320,6 +319,18 @@ export class AdminRulesService {
     if (input.parentKey === input.childKey) {
       throw new ValidationError('A feature cannot depend on itself')
     }
+
+    // Double-check against DB to guard against registry/DB divergence (e.g. mid-sync restart)
+    const [parentDef, childDef] = await Promise.all([
+      this.db('feature_definitions')
+        .where({ product_id: input.productId, feature_key: input.parentKey, status: 'active' })
+        .first(),
+      this.db('feature_definitions')
+        .where({ product_id: input.productId, feature_key: input.childKey, status: 'active' })
+        .first(),
+    ])
+    if (!parentDef) throw new ValidationError(`Feature key '${input.parentKey}' not active in feature_definitions`)
+    if (!childDef) throw new ValidationError(`Feature key '${input.childKey}' not active in feature_definitions`)
 
     const existing = await this.depsRepo.findEdge(input.productId, input.parentKey, input.childKey)
     if (existing) {
@@ -341,7 +352,7 @@ export class AdminRulesService {
 
     let createdDep!: DependencyRow
     await withTransaction(this.db, async (trx) => {
-      createdDep = await this.depsRepo!.add({
+      createdDep = await this.depsRepo.add({
         product_id: input.productId,
         parent_feature_key: input.parentKey,
         child_feature_key: input.childKey,
@@ -379,8 +390,6 @@ export class AdminRulesService {
   }
 
   async removeDependency(input: RemoveDependencyInput): Promise<void> {
-    if (!this.depsRepo) throw new Error('DependenciesRepository not configured')
-
     const dep = await this.depsRepo.findById(input.depId)
     if (!dep || dep.product_id !== input.productId) {
       throw new NotFoundError(`Dependency ${input.depId} not found`)
@@ -391,7 +400,7 @@ export class AdminRulesService {
     if (!product) throw new NotFoundError(`Product ${input.productId} not found`)
 
     await withTransaction(this.db, async (trx) => {
-      await this.depsRepo!.remove(input.depId, trx)
+      await this.depsRepo.remove(input.depId, trx)
 
       const newRevision = product.current_revision + 1
       try {
@@ -413,7 +422,7 @@ export class AdminRulesService {
         rule_id: null,
         old_value_json: edgeJson,
         new_value_json: edgeJson,
-        reason: '',
+        reason: input.reason ?? '',
         changed_by: input.changedBy ?? 'unknown',
         request_id: null,
       }, trx)
@@ -424,7 +433,6 @@ export class AdminRulesService {
   }
 
   async listDependencies(productId: number): Promise<DependencyRow[]> {
-    if (!this.depsRepo) return []
     return this.depsRepo.listByProduct(productId)
   }
 

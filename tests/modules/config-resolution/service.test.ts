@@ -5,6 +5,7 @@ import path from 'path'
 import { DefaultProductsRepository } from '../../../src/modules/products/repository'
 import { DefaultDefinitionsRepository } from '../../../src/modules/definitions/repository'
 import { DefaultRulesRepository } from '../../../src/modules/rules/repository'
+import { DefaultDependenciesRepository } from '../../../src/modules/dependencies/repository'
 import { ConfigResolutionService } from '../../../src/modules/config-resolution/service'
 import type { RequestContext } from '../../../src/modules/config-resolution/types'
 
@@ -391,5 +392,171 @@ describe('ConfigResolutionService', () => {
     await service.rebuildSnapshot(productId)
     const snap2 = await service.resolveConfig(productId, anonCtx())
     expect(snap2.features['chat']).toEqual({ isEnabled: true })
+  })
+})
+
+// ─── Dependency propagation tests ─────────────────────────────────────────────
+
+function createTestKnex2(): Knex {
+  return KnexLib({
+    client: 'better-sqlite3',
+    connection: { filename: ':memory:' },
+    useNullAsDefault: true,
+    migrations: {
+      directory: path.join(__dirname, '../../../src/db/migrations'),
+      extension: 'ts',
+      loadExtensions: ['.ts'],
+    },
+  })
+}
+
+const BASE_DEF_PROP = {
+  payload_schema_json: null as null,
+  manifest_owner: null as null,
+  source_priority_mode: 'server',
+  delivery_mode: 'remoteCapable',
+  manifest_hash: 'hash-prop',
+  status: 'active' as const,
+}
+
+describe('Dependency propagation', () => {
+  let db2: Knex
+  let productsRepo2: DefaultProductsRepository
+  let definitionsRepo2: DefaultDefinitionsRepository
+  let rulesRepo2: DefaultRulesRepository
+  let depsRepo: DefaultDependenciesRepository
+  let service2: ConfigResolutionService
+  let productId2: number
+
+  beforeAll(async () => {
+    db2 = createTestKnex2()
+    await db2.migrate.latest()
+    productsRepo2 = new DefaultProductsRepository(db2)
+    definitionsRepo2 = new DefaultDefinitionsRepository(db2)
+    rulesRepo2 = new DefaultRulesRepository(db2)
+    depsRepo = new DefaultDependenciesRepository(db2)
+    service2 = new ConfigResolutionService(productsRepo2, definitionsRepo2, rulesRepo2, depsRepo)
+    const product = await productsRepo2.upsertByName('prop_product', 3600)
+    productId2 = product.id
+  })
+
+  afterAll(async () => {
+    await db2.destroy()
+  })
+
+  beforeEach(async () => {
+    await db2('flag_dependencies').delete()
+    await db2('feature_rules').delete()
+    await db2('feature_definitions').delete()
+    service2.invalidateCache(productId2)
+  })
+
+  async function upsertDef(key: string, isEnabled: boolean) {
+    await definitionsRepo2.upsert({
+      product_id: productId2,
+      feature_key: key,
+      default_entry_json: JSON.stringify({ isEnabled }),
+      ...BASE_DEF_PROP,
+    })
+  }
+
+  async function addEdge(parent: string, child: string) {
+    await depsRepo.add({ product_id: productId2, parent_feature_key: parent, child_feature_key: child, reason: null })
+  }
+
+  // PROP-1: parent disabled → child disabled (basic propagation)
+  it('PROP-1: parent disabled propagates to child', async () => {
+    await upsertDef('parent_feat', false)  // disabled
+    await upsertDef('child_feat', true)    // enabled by default
+    await addEdge('parent_feat', 'child_feat')
+    service2.invalidateCache(productId2)
+
+    const snap = await service2.resolveConfig(productId2, anonCtx())
+    expect((snap.features['child_feat'] as { isEnabled?: boolean }).isEnabled).toBe(false)
+  })
+
+  // PROP-2: parent enabled → child keeps its own resolved value (no propagation)
+  it('PROP-2: parent enabled does not force child to any specific value', async () => {
+    await upsertDef('parent_feat', true)  // enabled
+    await upsertDef('child_feat', true)   // enabled
+    await addEdge('parent_feat', 'child_feat')
+    service2.invalidateCache(productId2)
+
+    const snap = await service2.resolveConfig(productId2, anonCtx())
+    expect((snap.features['child_feat'] as { isEnabled?: boolean }).isEnabled).toBe(true)
+  })
+
+  // PROP-3: chain A→B→C: disabling A disables B and C
+  it('PROP-3: chain propagation A→B→C disabled when A disabled', async () => {
+    await upsertDef('feat_a', false)
+    await upsertDef('feat_b', true)
+    await upsertDef('feat_c', true)
+    await addEdge('feat_a', 'feat_b')
+    await addEdge('feat_b', 'feat_c')
+    service2.invalidateCache(productId2)
+
+    const snap = await service2.resolveConfig(productId2, anonCtx())
+    expect((snap.features['feat_b'] as { isEnabled?: boolean }).isEnabled).toBe(false)
+    expect((snap.features['feat_c'] as { isEnabled?: boolean }).isEnabled).toBe(false)
+  })
+
+  // PROP-4: AND semantics: A disabled + B enabled, both parents of C → C disabled
+  it('PROP-4: AND semantics — one disabled parent disables child', async () => {
+    await upsertDef('dep_a', false)   // disabled
+    await upsertDef('dep_b', true)    // enabled
+    await upsertDef('dep_c', true)    // enabled by default
+    await addEdge('dep_a', 'dep_c')
+    await addEdge('dep_b', 'dep_c')
+    service2.invalidateCache(productId2)
+
+    const snap = await service2.resolveConfig(productId2, anonCtx())
+    expect((snap.features['dep_c'] as { isEnabled?: boolean }).isEnabled).toBe(false)
+  })
+
+  // PROP-5: AND semantics: A enabled + B enabled, both parents of C → C enabled
+  it('PROP-5: AND semantics — all parents enabled keeps child enabled', async () => {
+    await upsertDef('dep_a', true)
+    await upsertDef('dep_b', true)
+    await upsertDef('dep_c', true)
+    await addEdge('dep_a', 'dep_c')
+    await addEdge('dep_b', 'dep_c')
+    service2.invalidateCache(productId2)
+
+    const snap = await service2.resolveConfig(productId2, anonCtx())
+    expect((snap.features['dep_c'] as { isEnabled?: boolean }).isEnabled).toBe(true)
+  })
+
+  // PROP-6: orphaned edge (key not in features) is silently ignored — no crash
+  it('PROP-6: orphaned edge key not in features is silently ignored', async () => {
+    await upsertDef('real_feat', true)
+    // Insert an edge referencing a non-existent key directly
+    await db2('flag_dependencies').insert({
+      product_id: productId2,
+      parent_feature_key: 'ghost_feat',
+      child_feature_key: 'real_feat',
+      reason: null,
+    })
+    service2.invalidateCache(productId2)
+
+    const snap = await service2.resolveConfig(productId2, anonCtx())
+    // real_feat is unchanged — orphaned edge is ignored
+    expect((snap.features['real_feat'] as { isEnabled?: boolean }).isEnabled).toBe(true)
+  })
+
+  // PROP-7: cycle safety-net — artificially insert a cycle, resolveConfig doesn't crash
+  it('PROP-7: cycle in DB does not crash resolveConfig', async () => {
+    await upsertDef('cycle_a', true)
+    await upsertDef('cycle_b', true)
+    // Artificially insert a cycle bypassing cycle detection
+    await db2('flag_dependencies').insert([
+      { product_id: productId2, parent_feature_key: 'cycle_a', child_feature_key: 'cycle_b', reason: null },
+      { product_id: productId2, parent_feature_key: 'cycle_b', child_feature_key: 'cycle_a', reason: null },
+    ])
+    service2.invalidateCache(productId2)
+
+    // Must not throw
+    const snap = await service2.resolveConfig(productId2, anonCtx())
+    expect(snap.features['cycle_a']).toBeDefined()
+    expect(snap.features['cycle_b']).toBeDefined()
   })
 })

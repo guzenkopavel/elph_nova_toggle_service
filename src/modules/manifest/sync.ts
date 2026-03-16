@@ -3,6 +3,7 @@ import type { DefinitionsRepository } from '../definitions/repository'
 import type { ProductsRepository } from '../products/repository'
 import { withTransaction } from '../../db/transaction'
 import type { ManifestDefinition } from './registry'
+import type { ConfigResolutionService } from '../config-resolution/service.js'
 
 export interface SyncManifestInput {
   productName: string
@@ -22,10 +23,11 @@ export class ManifestSyncService {
     private readonly db: Knex,
     private readonly definitionsRepo: DefinitionsRepository,
     private readonly productsRepo: ProductsRepository,
+    private readonly resolutionService?: Pick<ConfigResolutionService, 'invalidateCache'>,
   ) {}
 
   async sync(input: SyncManifestInput): Promise<SyncManifestResult> {
-    return withTransaction(this.db, async (trx) => {
+    const result = await withTransaction(this.db, async (trx) => {
       const product = await this.productsRepo.upsertByName(input.productName, 3600, trx)
 
       const existing = await trx('feature_definitions')
@@ -59,6 +61,9 @@ export class ManifestSyncService {
       const toArchive = [...existingKeys].filter((k) => !incomingKeys.has(k))
       for (const key of toArchive) {
         await this.definitionsRepo.archive(product.id, key, trx)
+        // Note: dependency edges referencing archived keys are intentionally kept in DB.
+        // applyDependencyPropagation skips edges whose keys are absent from the resolved
+        // feature map, so orphaned edges are harmless at resolution time.
       }
 
       await this.productsRepo.updateManifestHash(product.id, input.manifestHash, trx)
@@ -70,6 +75,10 @@ export class ManifestSyncService {
         manifestHash: input.manifestHash,
       }
     })
+    // Invalidate compiled snapshot cache after transaction commits.
+    // Must run after withTransaction returns — never inside the transaction.
+    this.resolutionService?.invalidateCache(result.productId)
+    return result
   }
 
   driftReadyCheck(productName: string, expectedHash: string): () => Promise<void> {
