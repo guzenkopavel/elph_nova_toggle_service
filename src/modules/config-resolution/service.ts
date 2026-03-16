@@ -101,7 +101,7 @@ export class ConfigResolutionService {
     for (const [featureKey, defaultEntry] of parsed.parsedDefaults) {
       const rulesForKey = parsed.parsedRules.filter(r => r.feature_key === featureKey)
       const bestRule = selectBestRule(rulesForKey, ctx) as ParsedRuleRow | null
-      features[featureKey] = bestRule ? bestRule.parsedEntry : defaultEntry
+      features[featureKey] = bestRule ? { ...defaultEntry, ...bestRule.parsedEntry } : defaultEntry
     }
 
     const propagated = applyDependencyPropagation(features, parsed.parsedEdges, this.warn)
