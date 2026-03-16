@@ -1,9 +1,9 @@
 {% extends "layout.njk" %}
 
-{% block title %}Error {{ statusCode }}{% endblock %}
+{% block title %}Ошибка {{ statusCode }}{% endblock %}
 
 {% block content %}
-<h1>Error {{ statusCode }}</h1>
+<h1>Ошибка {{ statusCode }}</h1>
 <p class="error">{{ message }}</p>
-<p><a href="/admin/features">Back to Features</a></p>
+<p><a href="/admin/features">К списку фич</a></p>
 {% endblock %}

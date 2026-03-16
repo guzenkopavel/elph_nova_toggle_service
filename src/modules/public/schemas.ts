@@ -4,9 +4,10 @@ export const featureConfigHeaders = {
     platform: { type: 'string', enum: ['ios', 'android', 'web', 'desktop'] },
     appname: { type: 'string', minLength: 1 },
     appversion: { type: 'string', minLength: 1 },
+    'x-api-version': { type: 'string', minLength: 1 },
     authorization: { type: 'string' },
   },
-  required: ['platform', 'appname', 'appversion'],
+  required: ['platform', 'appname'],
 } as const
 
 export const featureConfigResponse200 = {

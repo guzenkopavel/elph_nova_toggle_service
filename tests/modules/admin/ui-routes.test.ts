@@ -467,7 +467,7 @@ describe('Admin UI routes', () => {
     }
   })
 
-  it('UI-V3: POST create rule with invalid entry_json → 200 with error', async () => {
+  it('UI-V3: POST create rule with invalid payload_json → 200 with error', async () => {
     const app = await buildApp(editorVerifier())
     try {
       const { token, cookieHeader } = await getCsrfToken(app, '/admin/features/chat/rules/new', 'Bearer editor-token')
@@ -475,7 +475,8 @@ describe('Admin UI routes', () => {
       const body = [
         `audience=all`,
         `platform=all`,
-        `entry_json=not-valid-json`,
+        `is_enabled=true`,
+        `payload_json=not-valid-json`,
         `reason=test`,
         `expected_revision=0`,
         `_csrf=${encodeURIComponent(token)}`,

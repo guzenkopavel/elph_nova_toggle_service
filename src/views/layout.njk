@@ -2,11 +2,15 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>{% block title %}Admin{% endblock %} — Feature Toggles</title>
+  <title>{% block title %}Админ{% endblock %} — Feature Toggles</title>
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <style>
     body { font-family: system-ui; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
-    nav a { margin-right: 1rem; }
+    nav { display: flex; align-items: center; flex-wrap: wrap; gap: 0; }
+    nav a { margin-right: 1rem; text-decoration: none; }
+    nav a:hover { text-decoration: underline; }
+    .nav-logout { margin-left: auto; background: none; border: none; cursor: pointer; color: #c00; font-size: 1rem; padding: 0; }
+    .nav-logout:hover { text-decoration: underline; }
     table { border-collapse: collapse; width: 100%; }
     td, th { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
     .error { color: red; }
@@ -18,9 +22,13 @@
 </head>
 <body>
   <nav>
-    <a href="/admin/features">Features</a>
-    <a href="/admin/preview">Preview</a>
-    <a href="/admin/revisions">Revisions</a>
+    <a href="/admin/features">Фичи</a>
+    <a href="/admin/preview">Превью</a>
+    <a href="/admin/revisions">Ревизии</a>
+    <a href="/admin/help">Помощь</a>
+    <form method="POST" action="/admin/logout">
+      <button type="submit" class="nav-logout">Выйти</button>
+    </form>
   </nav>
   <hr>
   {% block content %}{% endblock %}

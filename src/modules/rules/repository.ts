@@ -8,7 +8,12 @@ export interface RuleRow {
   platform: 'all' | 'ios' | 'android' | 'web' | 'desktop'
   min_app_version: string | null
   max_app_version: string | null
+  /** Full rule value as JSON text (contains isEnabled + optional payload fields) */
   entry_json: string
+  /** Added in migration 006: explicit enabled/disabled flag (optional, derived from entry_json) */
+  is_enabled?: boolean
+  /** Added in migration 006: extra payload fields as JSON text (optional) */
+  payload_json?: string | null
   is_active: boolean
   created_by: string | null
   updated_by: string | null

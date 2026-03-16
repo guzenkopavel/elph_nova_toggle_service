@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Login — Feature Toggles</title>
+  <title>Вход — Feature Toggles</title>
   <style>
     body { font-family: system-ui; max-width: 400px; margin: 6rem auto; padding: 0 1rem; }
     h1 { margin-bottom: 1.5rem; }
@@ -13,15 +13,15 @@
   </style>
 </head>
 <body>
-  <h1>Admin Login</h1>
+  <h1>Вход в панель управления</h1>
   {% if error %}
     <p class="error">{{ error }}</p>
   {% endif %}
   <form method="POST" action="/admin/login">
     <input type="hidden" name="_csrf" value="{{ csrfToken }}">
-    <label for="password">Password</label>
+    <label for="password">Пароль</label>
     <input type="password" id="password" name="password" autofocus required>
-    <input type="submit" value="Sign in">
+    <input type="submit" value="Войти">
   </form>
 </body>
 </html>

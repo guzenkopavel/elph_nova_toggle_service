@@ -1,17 +1,18 @@
 {% extends "layout.njk" %}
 
-{% block title %}Features{% endblock %}
+{% block title %}Фичи{% endblock %}
 
 {% block content %}
-<h1>Feature Toggles</h1>
+<h1>Фича-тоглы</h1>
 <table>
   <thead>
     <tr>
-      <th>Key</th>
-      <th>Name</th>
-      <th>Active Rules</th>
-      <th>Dependencies</th>
-      <th>Actions</th>
+      <th>Ключ</th>
+      <th>Название</th>
+      <th>По умолчанию</th>
+      <th>Активные правила</th>
+      <th>Зависимости</th>
+      <th>Действия</th>
     </tr>
   </thead>
   <tbody>
@@ -19,12 +20,13 @@
     <tr>
       <td><a href="/admin/features/{{ feature.feature_key }}">{{ feature.feature_key }}</a></td>
       <td>{{ feature.name }}</td>
+      <td>{{ "✓ Вкл" if feature.defaultIsEnabled else "✗ Выкл" }}</td>
       <td>{{ feature.activeRuleCount }}</td>
       <td>{{ feature.depCount }}</td>
-      <td><a href="/admin/features/{{ feature.feature_key }}">View</a></td>
+      <td><a href="/admin/features/{{ feature.feature_key }}">Открыть</a></td>
     </tr>
     {% else %}
-    <tr><td colspan="5">No features in manifest registry.</td></tr>
+    <tr><td colspan="6">Фичи не найдены в манифесте.</td></tr>
     {% endfor %}
   </tbody>
 </table>

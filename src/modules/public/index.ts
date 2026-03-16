@@ -1,8 +1,9 @@
+import { z } from 'zod'
 import type { FastifyPluginAsync } from 'fastify'
 import type { ConfigResolutionService } from '../config-resolution/service'
 import type { Platform } from '../config-resolution/types'
 import type { TokenVerifier } from '../auth/token-verifier'
-import { TokenInvalidError, InfraError } from '../auth/token-verifier'
+import { TokenInvalidError } from '../auth/token-verifier'
 import { featureConfigHeaders, featureConfigResponse200 } from './schemas'
 
 export interface PublicPluginOptions {
@@ -11,8 +12,43 @@ export interface PublicPluginOptions {
   tokenVerifier: TokenVerifier
 }
 
+const flagsQuerySchema = z.object({
+  platform: z.enum(['ios', 'android', 'web', 'desktop']).default('ios'),
+  appversion: z.string().min(1).default('1.0.0'),
+})
+
 const publicPlugin: FastifyPluginAsync<PublicPluginOptions> = async (fastify, options) => {
   const { resolutionService, productId, tokenVerifier } = options
+
+  // ─── GET /flags — browser-accessible HTML page with resolved feature flags ──
+
+  fastify.get('/flags', async (request, reply) => {
+    const parseResult = flagsQuerySchema.safeParse(request.query)
+    const { platform, appversion } = parseResult.success
+      ? parseResult.data
+      : { platform: 'ios' as const, appversion: '1.0.0' }
+
+    let features: Record<string, unknown> | undefined
+    let revision: number | undefined
+    let error: string | undefined
+
+    try {
+      const snapshot = await resolutionService.resolveConfig(productId, {
+        authState: 'anonymous',
+        platform,
+        appVersion: appversion,
+      })
+      features = snapshot.features as Record<string, unknown>
+      revision = snapshot.revision
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Unknown error'
+    }
+
+    const html = await reply.viewAsync('flags.njk', { platform, appversion, features, revision, error })
+    return reply.type('text/html').send(html)
+  })
+
+  // ─── GET /api/v1/feature-config ─────────────────────────────────────────────
 
   fastify.get('/api/v1/feature-config', {
     schema: {
@@ -25,8 +61,14 @@ const publicPlugin: FastifyPluginAsync<PublicPluginOptions> = async (fastify, op
     const headers = request.headers as {
       platform: Platform
       appname: string
-      appversion: string
+      appversion?: string
+      'x-api-version'?: string
       authorization?: string
+    }
+
+    const appVersion = (headers.appversion ?? headers['x-api-version'] ?? '').trim()
+    if (!appVersion) {
+      return reply.code(400).send({ error: 'Missing required header: appversion or x-api-version' })
     }
 
     let authResult: Awaited<ReturnType<TokenVerifier['verify']>>
@@ -44,7 +86,7 @@ const publicPlugin: FastifyPluginAsync<PublicPluginOptions> = async (fastify, op
     const ctx = {
       authState: authResult.state,
       platform: headers.platform,
-      appVersion: headers.appversion,
+      appVersion,
     }
 
     const snapshot = await resolutionService.resolveConfig(productId, ctx)

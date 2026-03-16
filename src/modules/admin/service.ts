@@ -223,7 +223,7 @@ export class AdminRulesService {
         feature_key: existing.feature_key,
         rule_id: input.ruleId,
         old_value_json: existing.entry_json,
-        new_value_json: input.entry_json ? JSON.stringify(input.entry_json) : existing.entry_json,
+        new_value_json: input.entry_json !== undefined ? JSON.stringify(input.entry_json) : existing.entry_json,
         reason: input.reason,
         changed_by: input.changedBy ?? 'unknown',
         request_id: null,
@@ -438,25 +438,21 @@ export class AdminRulesService {
 
   private validateEntryJson(featureKey: string, entryJson: Record<string, unknown>): void {
     const def = this.registry.getByKey(featureKey)
-    if (!def) throw new ValidationError(`Feature key '${featureKey}' not in registry`)
-
-    if (!def.payload_schema_json) return
+    if (!def || !def.payload_schema_json) return
 
     let schema: { fields?: Array<{ name: string }> }
     try {
       schema = JSON.parse(def.payload_schema_json) as { fields?: Array<{ name: string }> }
     } catch {
-      // Unparseable schema — skip validation rather than blocking all writes
       return
     }
 
     const schemaFields = schema.fields ?? []
     const schemaKeys = new Set(schemaFields.map((f) => f.name))
-
     if (schemaKeys.size === 0) return
 
     for (const key of Object.keys(entryJson)) {
-      if (key !== 'isEnabled' && !schemaKeys.has(key)) {
+      if (!schemaKeys.has(key)) {
         throw new ValidationError(`Unknown field '${key}' in entry_json for feature '${featureKey}'`)
       }
     }
@@ -487,6 +483,8 @@ export class AdminRulesService {
       min_app_version: candidate.min_app_version ?? null,
       max_app_version: candidate.max_app_version ?? null,
       entry_json: '{}',
+      is_enabled: true,
+      payload_json: null,
       is_active: true,
       created_by: null,
       updated_by: null,

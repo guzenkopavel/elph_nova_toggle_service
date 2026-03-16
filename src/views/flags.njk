@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Feature Flags</title>
+  <style>
+    body { font-family: system-ui; max-width: 960px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+    h1 { margin-bottom: 0.25rem; }
+    .subtitle { color: #666; margin-bottom: 1.5rem; font-size: 0.95rem; }
+    .form-row { display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 1.5rem; }
+    .form-group label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.25rem; }
+    select, input[type=text] { padding: 0.35rem 0.5rem; border: 1px solid #ccc; border-radius: 4px; }
+    button { padding: 0.4rem 1.2rem; cursor: pointer; border: 1px solid #888; border-radius: 4px; background: #f5f5f5; }
+    button:hover { background: #e8e8e8; }
+    table { border-collapse: collapse; width: 100%; }
+    td, th { border: 1px solid #ddd; padding: 0.5rem 0.75rem; text-align: left; }
+    th { background: #f9f9f9; }
+    .enabled { color: #2a7c2a; font-weight: 600; }
+    .disabled { color: #999; }
+    .meta { color: #666; font-size: 0.875rem; margin-bottom: 0.75rem; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+  <h1>Feature Flags</h1>
+  <p class="subtitle">Текущие значения флагов для анонимных пользователей.</p>
+
+  <form method="GET" action="/flags" class="form-row">
+    <div class="form-group">
+      <label for="platform">Платформа</label>
+      <select id="platform" name="platform">
+        <option value="ios" {{ "selected" if platform == "ios" }}>iOS</option>
+        <option value="android" {{ "selected" if platform == "android" }}>Android</option>
+        <option value="web" {{ "selected" if platform == "web" }}>Web</option>
+        <option value="desktop" {{ "selected" if platform == "desktop" }}>Desktop</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="appversion">Версия приложения</label>
+      <input type="text" id="appversion" name="appversion" value="{{ appversion }}" placeholder="1.0.0" style="width:110px">
+    </div>
+    <div class="form-group" style="padding-bottom:2px">
+      <button type="submit">Обновить</button>
+    </div>
+  </form>
+
+  {% if error %}
+    <p class="error">Ошибка: {{ error }}</p>
+  {% elif features %}
+    <p class="meta">Ревизия: <strong>{{ revision }}</strong> · Платформа: {{ platform }} · Версия: {{ appversion }}</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Ключ фичи</th>
+          <th>Включён</th>
+          <th>Payload</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for key, value in features %}
+        <tr>
+          <td>{{ key }}</td>
+          <td class="{{ 'enabled' if value.isEnabled else 'disabled' }}">
+            {{ "✓ Да" if value.isEnabled else "✗ Нет" }}
+          </td>
+          <td>
+            {% if value.payload %}
+              <code>{{ value.payload | dump }}</code>
+            {% else %}
+              —
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</body>
+</html>

@@ -134,11 +134,19 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
       depCountByKey.set(dep.child_feature_key, (depCountByKey.get(dep.child_feature_key) ?? 0) + 1)
     }
 
-    const features = allDefs.map((def) => ({
-      ...def,
-      activeRuleCount: ruleCountByKey.get(def.feature_key) ?? 0,
-      depCount: depCountByKey.get(def.feature_key) ?? 0,
-    }))
+    const features = allDefs.map((def) => {
+      let defaultIsEnabled = true
+      try {
+        const parsed = JSON.parse(def.default_entry_json) as { isEnabled?: boolean }
+        defaultIsEnabled = parsed.isEnabled !== false
+      } catch {}
+      return {
+        ...def,
+        activeRuleCount: ruleCountByKey.get(def.feature_key) ?? 0,
+        depCount: depCountByKey.get(def.feature_key) ?? 0,
+        defaultIsEnabled,
+      }
+    })
 
     const html = await reply.viewAsync('features.njk', { features })
     return reply.send(html)
@@ -159,7 +167,17 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
     }
 
     const allRules = await service.listRules(productId)
-    const rules = allRules.filter((r) => r.feature_key === key)
+    const rules = allRules.filter((r) => r.feature_key === key).map((r) => {
+      let parsedIsEnabled = true
+      let parsedPayloadJson: string | null = null
+      try {
+        const entry = JSON.parse(r.entry_json) as { isEnabled?: boolean; [k: string]: unknown }
+        parsedIsEnabled = entry.isEnabled !== false
+        const { isEnabled: _ie, ...rest } = entry
+        if (Object.keys(rest).length > 0) parsedPayloadJson = JSON.stringify(rest)
+      } catch {}
+      return { ...r, is_enabled: parsedIsEnabled, payload_json: parsedPayloadJson }
+    })
     const currentRevision = await service.getCurrentRevision(productId)
     const csrfToken = reply.generateCsrf()
     const allDeps = await service.listDependencies(productId)
@@ -236,13 +254,22 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
     const currentRevision = await service.getCurrentRevision(productId)
     const csrfToken = reply.generateCsrf()
 
+    let ruleIsEnabled = true
+    let rulePayloadJson: string | null = null
+    try {
+      const entry = JSON.parse(rule.entry_json) as { isEnabled?: boolean; [k: string]: unknown }
+      ruleIsEnabled = entry.isEnabled !== false
+      const { isEnabled: _ie, ...rest } = entry
+      if (Object.keys(rest).length > 0) rulePayloadJson = JSON.stringify(rest)
+    } catch {}
+
     const html = await reply.viewAsync('rule-form.njk', {
       featureKey: key,
       editMode: true,
       formAction: `/admin/features/${key}/rules/${ruleId}`,
       currentRevision,
       csrfToken,
-      rule,
+      rule: { ...rule, is_enabled: ruleIsEnabled, payload_json: rulePayloadJson },
       errorMessage: null,
     })
     return reply.send(html)
@@ -330,6 +357,16 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
     }
   })
 
+  // ─── GET /admin/help ────────────────────────────────────────────────────────
+
+  fastify.get('/admin/help', {
+    preHandler: viewerHtmlHook,
+    ...(rateLimitConfig && { config: { rateLimit: rateLimitConfig } }),
+  }, async (_request, reply) => {
+    const html = await reply.viewAsync('help.njk', {})
+    return reply.send(html)
+  })
+
   // ─── GET /admin/revisions ───────────────────────────────────────────────────
 
   fastify.get('/admin/revisions', {
@@ -355,7 +392,15 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
       return renderFormWithError(reply, service, productId, key, null, result.error, body)
     }
 
-    const { audience, platform, min_app_version, max_app_version, entry_json, reason, expected_revision } = result.data
+    const { audience, platform, min_app_version, max_app_version, is_enabled, payload_json, reason, expected_revision } = result.data
+
+    let entryJson: Record<string, unknown> = { isEnabled: is_enabled }
+    if (payload_json) {
+      try {
+        const payloadObj = JSON.parse(payload_json) as Record<string, unknown>
+        entryJson = { isEnabled: is_enabled, ...payloadObj }
+      } catch {}
+    }
 
     try {
       await service.createRule({
@@ -365,7 +410,7 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
         platform,
         min_app_version: min_app_version || null,
         max_app_version: max_app_version || null,
-        entry_json,
+        entry_json: entryJson,
         reason,
         expectedRevision: expected_revision,
         changedBy: request.adminSub ?? 'unknown',
@@ -400,7 +445,15 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
       return renderFormWithError(reply, service, productId, key, ruleId, result.error, body)
     }
 
-    const { audience, platform, min_app_version, max_app_version, entry_json, reason, expected_revision } = result.data
+    const { audience, platform, min_app_version, max_app_version, is_enabled, payload_json, reason, expected_revision } = result.data
+
+    let updateEntryJson: Record<string, unknown> = { isEnabled: is_enabled }
+    if (payload_json) {
+      try {
+        const payloadObj = JSON.parse(payload_json) as Record<string, unknown>
+        updateEntryJson = { isEnabled: is_enabled, ...payloadObj }
+      } catch {}
+    }
 
     try {
       await service.updateRule({
@@ -410,7 +463,7 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
         platform,
         min_app_version: min_app_version || null,
         max_app_version: max_app_version || null,
-        entry_json,
+        entry_json: updateEntryJson,
         reason,
         expectedRevision: expected_revision,
         changedBy: request.adminSub ?? 'unknown',
@@ -730,7 +783,8 @@ interface ParsedRuleForm {
   platform: 'all' | 'ios' | 'android' | 'web' | 'desktop'
   min_app_version: string | undefined
   max_app_version: string | undefined
-  entry_json: Record<string, unknown>
+  is_enabled: boolean
+  payload_json: string | undefined
   reason: string
   expected_revision: number
 }
@@ -740,29 +794,29 @@ function parseRuleFormBody(body: Record<string, string>): { success: true; data:
   const platformSchema = z.enum(['all', 'ios', 'android', 'web', 'desktop'])
 
   const audienceResult = audienceSchema.safeParse(body['audience'])
-  if (!audienceResult.success) return { success: false, error: 'Invalid audience value' }
+  if (!audienceResult.success) return { success: false, error: 'Неверное значение аудитории' }
 
   const platformResult = platformSchema.safeParse(body['platform'])
-  if (!platformResult.success) return { success: false, error: 'Invalid platform value' }
+  if (!platformResult.success) return { success: false, error: 'Неверное значение платформы' }
 
   if (!body['reason'] || !body['reason'].trim()) {
-    return { success: false, error: 'reason is required and must be non-empty' }
+    return { success: false, error: 'Причина обязательна и не должна быть пустой' }
   }
 
-  const entryJsonStr = body['entry_json']
-  if (!entryJsonStr || !entryJsonStr.trim()) {
-    return { success: false, error: 'entry_json is required' }
-  }
+  // Checkbox: present with value "true" → enabled, absent → disabled
+  const is_enabled = body['is_enabled'] === 'true'
 
-  let entryJson: Record<string, unknown>
-  try {
-    const parsed = JSON.parse(entryJsonStr) as unknown
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      return { success: false, error: 'entry_json must be a JSON object' }
+  // payload_json: validate if provided
+  const payloadJsonStr = body['payload_json']?.trim() || undefined
+  if (payloadJsonStr) {
+    try {
+      const parsed = JSON.parse(payloadJsonStr) as unknown
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        return { success: false, error: 'Payload должен быть JSON-объектом' }
+      }
+    } catch {
+      return { success: false, error: 'Payload содержит невалидный JSON' }
     }
-    entryJson = parsed as Record<string, unknown>
-  } catch {
-    return { success: false, error: 'entry_json is not valid JSON' }
   }
 
   const expectedRevision = parseInt(body['expected_revision'] ?? '0', 10)
@@ -777,7 +831,8 @@ function parseRuleFormBody(body: Record<string, string>): { success: true; data:
       platform: platformResult.data,
       min_app_version: body['min_app_version'] || undefined,
       max_app_version: body['max_app_version'] || undefined,
-      entry_json: entryJson,
+      is_enabled,
+      payload_json: payloadJsonStr,
       reason: body['reason'],
       expected_revision: expectedRevision,
     },

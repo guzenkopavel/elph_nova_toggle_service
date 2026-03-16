@@ -1,18 +1,18 @@
 {% extends "layout.njk" %}
 
-{% block title %}Revisions{% endblock %}
+{% block title %}Ревизии{% endblock %}
 
 {% block content %}
-<h1>Recent Revisions</h1>
+<h1>Последние ревизии</h1>
 <table>
   <thead>
     <tr>
-      <th>Revision</th>
-      <th>Timestamp</th>
-      <th>Change Type</th>
-      <th>Feature Key</th>
-      <th>Reason</th>
-      <th>Changed By</th>
+      <th>Ревизия</th>
+      <th>Время</th>
+      <th>Тип изменения</th>
+      <th>Ключ фичи</th>
+      <th>Причина</th>
+      <th>Изменил</th>
     </tr>
   </thead>
   <tbody>
@@ -26,7 +26,7 @@
       <td>{{ rev.changed_by }}</td>
     </tr>
     {% else %}
-    <tr><td colspan="6">No revisions yet.</td></tr>
+    <tr><td colspan="6">Ревизий пока нет.</td></tr>
     {% endfor %}
   </tbody>
 </table>
