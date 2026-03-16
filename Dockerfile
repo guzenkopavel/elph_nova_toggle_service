@@ -36,6 +36,9 @@ COPY knexfile.ts ./knexfile.ts
 COPY src/db/migrate.ts ./src/db/migrate.ts
 COPY src/db/migrations ./src/db/migrations
 
+# Operational scripts (sync-manifest, etc.) — tsx runs these directly
+COPY scripts ./scripts
+
 # Manifest — default baked-in copy; override with a volume mount in compose
 COPY manifest ./manifest
 
