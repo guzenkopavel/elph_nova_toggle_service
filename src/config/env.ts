@@ -1,13 +1,23 @@
 import { z } from 'zod'
 
+// Empty string from docker-compose ${VAR:-} expansion treated as absent
+const optionalUrl = z.preprocess(
+  (v) => (v === '' ? undefined : v),
+  z.string().url().optional(),
+)
+const optionalSecret = (min: number) =>
+  z.preprocess((v) => (v === '' ? undefined : v), z.string().min(min).optional())
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'staging', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
-  // TRUST_PROXY: set true ONLY when this server runs behind a trusted reverse proxy
-  // (nginx, ALB, etc.) that strips and re-adds X-Forwarded-For. Setting this without
-  // a proxy allows clients to spoof their IP and bypass per-IP rate limiting.
-  TRUST_PROXY: z.coerce.boolean().optional().default(false),
+  // TRUST_PROXY: set true ONLY when this server runs behind a trusted reverse proxy.
+  // Uses explicit string comparison — z.coerce.boolean() converts "false" → true (JS gotcha).
+  TRUST_PROXY: z.preprocess(
+    (v) => v === 'true' || v === '1' || v === true,
+    z.boolean().default(false),
+  ),
 
   // Database — required in staging/production, optional with default for local dev
   DATABASE_URL: z.string().min(1).default('sqlite:./data/feature-config.db'),
@@ -17,19 +27,19 @@ const envSchema = z.object({
   DEFAULT_PRODUCT_ID: z.string().min(1).default('elph_nova'),
 
   // Public base URL
-  FEATURE_CONFIG_PUBLIC_BASE_URL: z.string().url().optional(),
-  FEATURE_CONFIG_ADMIN_BASE_URL: z.string().url().optional(),
+  FEATURE_CONFIG_PUBLIC_BASE_URL: optionalUrl,
+  FEATURE_CONFIG_ADMIN_BASE_URL: optionalUrl,
 
   // SSO / JWKS — optional for local dev, required when AUTH_MODE is enabled
-  SSO_JWKS_URI: z.string().url().optional(),
-  SSO_ISSUER: z.string().optional(),
-  SSO_AUDIENCE: z.string().optional(),
+  SSO_JWKS_URI: optionalUrl,
+  SSO_ISSUER: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  SSO_AUDIENCE: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
   SSO_JWKS_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(3000),
 
   // Admin session
-  ADMIN_SESSION_SECRET: z.string().min(32).optional(),
-  ADMIN_ALLOWED_IPS: z.string().optional(),
-  ADMIN_COOKIE_SECRET: z.string().min(32).optional(),
+  ADMIN_SESSION_SECRET: optionalSecret(32),
+  ADMIN_ALLOWED_IPS: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  ADMIN_COOKIE_SECRET: optionalSecret(32),
 
   // Dev only — forbidden on production
   DEV_ADMIN_PASSWORD: z.string().optional(),
