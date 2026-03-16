@@ -25,7 +25,6 @@ playwright.config.ts
 # Dev tooling
 *.test.ts
 vitest.config.ts
-tsconfig.json
 
 # macOS
 .DS_Store
