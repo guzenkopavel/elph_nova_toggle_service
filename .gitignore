@@ -1,9 +1,28 @@
 node_modules/
 dist/
+
+# Environment — never commit real secrets
 .env
 .env.local
 .env.*.local
+
+# Database files
 data/
 *.db
 *.db-shm
 *.db-wal
+
+# Test artifacts
+test-results/
+playwright-report/
+coverage/
+
+# macOS
+.DS_Store
+
+# AI agent workspace (internal dev tooling, not part of the service)
+.claude/
+
+# Editor
+.idea/
+.vscode/
