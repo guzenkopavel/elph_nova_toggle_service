@@ -108,16 +108,17 @@ describe('GET /api/v1/feature-config', () => {
 
   // ─── A: Header validation (400) ──────────────────────────────────────────────
 
-  it('A1: missing Platform header returns 400', async () => {
+  it('A1: missing Platform header — platform inferred from User-Agent, returns 200', async () => {
     const res = await app.inject({
       method: 'GET',
       url: '/api/v1/feature-config',
       headers: {
         AppName: 'ElphNova',
         AppVersion: '2.0.0',
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)',
       },
     })
-    expect(res.statusCode).toBe(400)
+    expect(res.statusCode).toBe(200)
   })
 
   it('A2: invalid Platform value returns 400', async () => {
@@ -133,7 +134,7 @@ describe('GET /api/v1/feature-config', () => {
     expect(res.statusCode).toBe(400)
   })
 
-  it('A3: missing AppName header returns 400', async () => {
+  it('A3: missing AppName header — optional, returns 200', async () => {
     const res = await app.inject({
       method: 'GET',
       url: '/api/v1/feature-config',
@@ -142,10 +143,10 @@ describe('GET /api/v1/feature-config', () => {
         AppVersion: '2.0.0',
       },
     })
-    expect(res.statusCode).toBe(400)
+    expect(res.statusCode).toBe(200)
   })
 
-  it('A4: missing AppVersion header returns 400', async () => {
+  it('A4: missing AppVersion header — defaults to 1.0.0, returns 200', async () => {
     const res = await app.inject({
       method: 'GET',
       url: '/api/v1/feature-config',
@@ -154,7 +155,7 @@ describe('GET /api/v1/feature-config', () => {
         AppName: 'ElphNova',
       },
     })
-    expect(res.statusCode).toBe(400)
+    expect(res.statusCode).toBe(200)
   })
 
   // ─── B: Successful 200 responses ─────────────────────────────────────────────

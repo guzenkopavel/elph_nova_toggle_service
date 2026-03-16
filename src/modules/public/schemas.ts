@@ -7,7 +7,7 @@ export const featureConfigHeaders = {
     'x-api-version': { type: 'string', minLength: 1 },
     authorization: { type: 'string' },
   },
-  required: ['platform', 'appname'],
+  required: [],
 } as const
 
 export const featureConfigResponse200 = {

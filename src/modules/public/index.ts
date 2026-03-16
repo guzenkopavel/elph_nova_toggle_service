@@ -59,17 +59,16 @@ const publicPlugin: FastifyPluginAsync<PublicPluginOptions> = async (fastify, op
     },
   }, async (request, reply) => {
     const headers = request.headers as {
-      platform: Platform
-      appname: string
+      platform?: Platform
+      appname?: string
       appversion?: string
       'x-api-version'?: string
+      'user-agent'?: string
       authorization?: string
     }
 
-    const appVersion = (headers.appversion ?? headers['x-api-version'] ?? '').trim()
-    if (!appVersion) {
-      return reply.code(400).send({ error: 'Missing required header: appversion or x-api-version' })
-    }
+    const appVersion = (headers.appversion ?? headers['x-api-version'] ?? '1.0.0').trim()
+    const platform: Platform = headers.platform ?? detectPlatformFromUA(headers['user-agent'] ?? '')
 
     let authResult: Awaited<ReturnType<TokenVerifier['verify']>>
     try {
@@ -85,7 +84,7 @@ const publicPlugin: FastifyPluginAsync<PublicPluginOptions> = async (fastify, op
 
     const ctx = {
       authState: authResult.state,
-      platform: headers.platform,
+      platform,
       appVersion,
     }
 
@@ -100,6 +99,13 @@ const publicPlugin: FastifyPluginAsync<PublicPluginOptions> = async (fastify, op
         features: snapshot.features,
       })
   })
+}
+
+function detectPlatformFromUA(ua: string): Platform {
+  const s = ua.toLowerCase()
+  if (s.includes('iphone') || s.includes('ipad') || s.includes('ipod')) return 'ios'
+  if (s.includes('android')) return 'android'
+  return 'web'
 }
 
 export default publicPlugin
