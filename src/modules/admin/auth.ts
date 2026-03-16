@@ -7,6 +7,10 @@ export const ROLE_EDITOR = 'feature-toggle-editor'
 
 export type AdminRole = typeof ROLE_VIEWER | typeof ROLE_EDITOR
 
+// Cookie name and value used for static-password sessions (self-hosted deployments).
+export const ADMIN_SESSION_COOKIE = 'adm_sess'
+export const ADMIN_SESSION_VALUE = 'editor'
+
 declare module 'fastify' {
   interface FastifyRequest {
     adminRole?: AdminRole
@@ -16,6 +20,17 @@ declare module 'fastify' {
 
 export function makeAdminAuthHook(verifier: TokenVerifier, requiredRole: AdminRole) {
   return async function adminAuthHook(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    // Check cookie-based session first (set by POST /admin/login for static-password auth).
+    const raw = request.cookies[ADMIN_SESSION_COOKIE]
+    if (raw) {
+      const unsigned = request.unsignCookie(raw)
+      if (unsigned.valid && unsigned.value === ADMIN_SESSION_VALUE) {
+        request.adminRole = ROLE_EDITOR
+        request.adminSub = 'session'
+        return
+      }
+    }
+
     const authHeader = request.headers.authorization
 
     let authResult: Awaited<ReturnType<TokenVerifier['verify']>>

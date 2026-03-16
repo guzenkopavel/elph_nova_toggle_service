@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest, FastifyInstance } from 'fastify'
 import type { AdminRulesService } from './service.js'
 import type { TokenVerifier } from '../auth/token-verifier.js'
-import { makeAdminAuthHook, ROLE_VIEWER, ROLE_EDITOR } from './auth.js'
+import { makeAdminAuthHook, ROLE_VIEWER, ROLE_EDITOR, ADMIN_SESSION_COOKIE, ADMIN_SESSION_VALUE } from './auth.js'
 import { ValidationError, ConflictError, NotFoundError } from './service.js'
 import type { ManifestRegistry } from '../manifest/registry.js'
 import type { RequestContext } from '../config-resolution/types.js'
@@ -20,6 +20,7 @@ export interface AdminUiPluginOptions {
   productId: number
   registry: ManifestRegistry
   rateLimitConfig?: AdminUiPluginRateLimitConfig
+  staticPassword?: string
 }
 
 // ─── Plugin ───────────────────────────────────────────────────────────────────
@@ -30,7 +31,7 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
     throw new Error('adminUiPlugin requires @fastify/csrf-protection to be registered before this plugin')
   }
 
-  const { service, verifier, productId, registry, rateLimitConfig } = options
+  const { service, verifier, productId, registry, rateLimitConfig, staticPassword } = options
 
   // ─── Auth hooks that return HTML errors ────────────────────────────────────
 
@@ -59,6 +60,49 @@ const adminUiPlugin: FastifyPluginAsync<AdminUiPluginOptions> = async (fastify, 
 
   const viewerHtmlHook = makeHtmlAuthHook(ROLE_VIEWER)
   const editorHtmlHook = makeHtmlAuthHook(ROLE_EDITOR)
+
+  // ─── GET /admin/login ───────────────────────────────────────────────────────
+
+  fastify.get('/admin/login', async (_request, reply) => {
+    if (!staticPassword) {
+      return reply.type('text/html').code(404).send(
+        '<!DOCTYPE html><html><body><h1>404</h1><p>Login not available (no ADMIN_STATIC_PASSWORD configured).</p></body></html>'
+      )
+    }
+    const csrfToken = reply.generateCsrf()
+    const html = await reply.viewAsync('login.njk', { csrfToken })
+    return reply.send(html)
+  })
+
+  // ─── POST /admin/login ──────────────────────────────────────────────────────
+
+  fastify.post('/admin/login', {
+    preHandler: (fastify as FastifyInstance & { csrfProtection: (req: FastifyRequest, reply: FastifyReply, done: () => void) => void }).csrfProtection,
+  }, async (request, reply) => {
+    if (!staticPassword) {
+      return reply.code(404).send({ error: 'Not found' })
+    }
+    const body = request.body as Record<string, string>
+    if (body.password !== staticPassword) {
+      const csrfToken = reply.generateCsrf()
+      const html = await reply.viewAsync('login.njk', { csrfToken, error: 'Invalid password' })
+      return reply.type('text/html').code(401).send(html)
+    }
+    reply.setCookie(ADMIN_SESSION_COOKIE, ADMIN_SESSION_VALUE, {
+      path: '/admin',
+      httpOnly: true,
+      sameSite: 'lax',
+      signed: true,
+    })
+    return reply.redirect('/admin/features')
+  })
+
+  // ─── POST /admin/logout ─────────────────────────────────────────────────────
+
+  fastify.post('/admin/logout', async (_request, reply) => {
+    reply.clearCookie(ADMIN_SESSION_COOKIE, { path: '/admin' })
+    return reply.redirect('/admin/login')
+  })
 
   // ─── GET /admin → redirect ──────────────────────────────────────────────────
 

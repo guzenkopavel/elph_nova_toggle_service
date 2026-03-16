@@ -41,6 +41,10 @@ const envSchema = z.object({
   ADMIN_ALLOWED_IPS: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
   ADMIN_COOKIE_SECRET: optionalSecret(32),
 
+  // Static admin password for self-hosted deployments without SSO.
+  // Allowed in all environments (unlike DEV_ADMIN_PASSWORD which is forbidden in production).
+  ADMIN_STATIC_PASSWORD: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(8).optional()),
+
   // Dev only — forbidden on production
   DEV_ADMIN_PASSWORD: z.string().optional(),
 

@@ -76,7 +76,7 @@ async function start() {
       // Reuse the already-constructed logger — avoids duplicating redact config
       logger: logger as object,
       publicOptions: { resolutionService, productId, tokenVerifier },
-      adminOptions: { service: adminService, verifier: tokenVerifier, productId, registry: manifestRegistry },
+      adminOptions: { service: adminService, verifier: tokenVerifier, productId, registry: manifestRegistry, staticPassword: env.ADMIN_STATIC_PASSWORD },
     })
 
     let closing = false

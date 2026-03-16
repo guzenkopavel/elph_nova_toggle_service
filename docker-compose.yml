@@ -56,6 +56,7 @@ services:
       ADMIN_COOKIE_SECRET: ${ADMIN_COOKIE_SECRET:?ADMIN_COOKIE_SECRET is required}
       ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET:-}
       ADMIN_ALLOWED_IPS: ${ADMIN_ALLOWED_IPS:-}
+      ADMIN_STATIC_PASSWORD: ${ADMIN_STATIC_PASSWORD:-}
 
       # SSO / JWKS (leave empty to allow anonymous + authenticated configs without JWT verification)
       SSO_JWKS_URI: ${SSO_JWKS_URI:-}

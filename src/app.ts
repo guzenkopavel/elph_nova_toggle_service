@@ -30,6 +30,7 @@ export interface AdminOptions {
   verifier: TokenVerifier
   productId: number
   registry?: ManifestRegistry
+  staticPassword?: string
 }
 
 export interface RateLimitOptions {
@@ -185,6 +186,7 @@ export async function createApp(options: AppOptions = {}): Promise<FastifyInstan
         rateLimitConfig: rl.enabled
           ? { max: rl.adminMax, timeWindow: rl.adminWindow }
           : undefined,
+        staticPassword: options.adminOptions.staticPassword,
       })
     }
   }
